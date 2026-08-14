@@ -1,0 +1,64 @@
+{
+  "_comment": [
+    "GitHub repository metadata (description + topics) for the published NORA-HAL",
+    "snapshots. Edit this file, then run set_repo_meta.ps1 -WhatIf to see the diff and",
+    "without -WhatIf to apply. Re-running is idempotent.",
+    "",
+    "Topics are a set, not a list: GitHub sorts them itself, lowercases them, and allows",
+    "only [a-z0-9-] (max 50 per repo, 50 chars each). The CK values below were derived",
+    "from the AK siblings measured on 2026-08-11 with ak->ck applied; where the AK repo",
+    "had no topics at all, the source of the set is named per repo."
+  ],
+  "owner": "sulaolab",
+  "repos": [
+    {
+      "name": "nora-hal-dspic33ck-spi-i2s-tdm",
+      "description": "SPI framed-mode I2S/TDM transport HAL for Microchip dsPIC33CK devices.",
+      "topics": ["audio", "dspic33", "dspic33ck", "embedded-c", "hal", "i2s", "microchip", "mplabx", "serial-audio", "spi", "tdm"],
+      "_topics_source": "AK spi-i2s-tdm had none; taken from AK dma's set (ak->ck) plus 'spi', minus 'sport' which is not a dsPIC33CK peripheral name"
+    },
+    {
+      "name": "nora-hal-dspic33ck-dma",
+      "description": "Small, readable low-level DMA HAL for Microchip dsPIC33CK devices.",
+      "topics": ["audio", "dma", "dspic33", "dspic33ck", "embedded-c", "hal", "i2s", "microchip", "mplabx", "serial-audio", "tdm"],
+      "_topics_source": "AK dma (ak->ck), 'sport' replaced by 'dma' -- SPORT is not a dsPIC33CK peripheral and the AK set was missing its own subject"
+    },
+    {
+      "name": "nora-hal-dspic33ck-timer",
+      "description": "Small, readable Timer HAL for Microchip dsPIC33CK devices (Timer1 tick + SCCP1 high-resolution counter).",
+      "topics": ["dspic33", "dspic33ck", "embedded-c", "hal", "microchip", "mplabx", "sccp", "timer"],
+      "_topics_source": "AK timer had none; built from the AK clock/uart pattern (family + toolchain + subject) plus 'sccp', which is what this family uses instead of Timer2"
+    },
+    {
+      "name": "nora-hal-dspic33ck-gpio",
+      "description": "Small, readable GPIO and PPS HAL for Microchip dsPIC33CK devices.",
+      "topics": ["curiosity-nano", "dspic33", "dspic33ck", "embedded-c", "gpio", "hal", "microchip", "mplabx", "pps", "xc-dsc"],
+      "_topics_source": "AK gpio (ak->ck); 'pkob4' -> 'curiosity-nano' (this family's boards use nEDBG, not PKOB4), 'curiosity-board' dropped for the same reason, 'pps'/'embedded-c'/'mplabx' added"
+    },
+    {
+      "name": "nora-hal-dspic33ck-clock",
+      "description": "Small, readable PLL and system-clock HAL for Microchip dsPIC33CK devices.",
+      "topics": ["clock", "dspic33", "dspic33ck", "embedded-c", "hal", "microchip", "mplabx", "oscillator", "pll"],
+      "_topics_source": "AK clock (ak->ck); 'clkgen' dropped because this family has no CLKGEN block, 'oscillator' added in its place"
+    },
+    {
+      "name": "nora-hal-dspic33ck-i2c",
+      "description": "Small, readable blocking-master and interrupt-slave I2C HAL for Microchip dsPIC33CK devices.",
+      "topics": ["dspic33", "dspic33ck", "embedded-c", "hal", "i2c", "microchip", "mplabx"],
+      "_topics_source": "AK i2c (ak->ck), unchanged otherwise"
+    },
+    {
+      "name": "nora-hal-dspic33ck-uart",
+      "description": "Small, readable UART HAL for Microchip dsPIC33CK devices.",
+      "topics": ["dspic33", "dspic33ck", "embedded-c", "hal", "microchip", "mplabx", "printf", "serial", "uart"],
+      "_topics_source": "AK uart (ak->ck), unchanged otherwise"
+    },
+
+    {
+      "name": "nora-hal-dspic33ak-spi-i2s-tdm",
+      "description": "SPI framed-mode I2S/TDM transport HAL for Microchip dsPIC33AK devices.",
+      "topics": ["audio", "dspic33", "dspic33ak", "embedded-c", "hal", "i2s", "microchip", "mplabx", "serial-audio", "sport", "spi", "tdm"],
+      "_topics_source": "backfill: this repo had an empty description and no topics. Mirrors the CK entry above, ak spelling, keeping 'sport' which is an AK peripheral name"
+    }
+  ]
+}
