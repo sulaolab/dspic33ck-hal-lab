@@ -1,0 +1,57 @@
+# Prefix-normalised canonical NORA transport declaration set.
+# Extracted by tools/host_check/run_nora_contract_check.py --update
+# Reference: sonora 9f9d380f1bdb (main -- "NORA HAL becomes a superset"); baseline byte-identical to the earlier 3955b78 pin
+# Do not hand-edit: regenerate, and review the diff as a Sonora change.
+callback <p>_spi_i2s_tdm_block_cb_t	void (*)(const <p>_tdm_slot_t*,<p>_tdm_slot_t*,void*)
+enum <p>_spi_i2s_tdm_clock_event_t	<P>_SPI_I2S_TDM_CLOCK_EVENT_NONE, <P>_SPI_I2S_TDM_CLOCK_EVENT_STOPPED, <P>_SPI_I2S_TDM_CLOCK_EVENT_RESUMED
+enum <p>_spi_i2s_tdm_clock_role_t	<P>_SPI_I2S_TDM_CLOCK_SLAVE, <P>_SPI_I2S_TDM_CLOCK_MASTER
+enum <p>_spi_i2s_tdm_error_t	<P>_SPI_I2S_TDM_ERR_NONE, <P>_SPI_I2S_TDM_ERR_BAD_INSTANCE, <P>_SPI_I2S_TDM_ERR_BAD_ARGUMENT, <P>_SPI_I2S_TDM_ERR_NOT_CONFIGURED, <P>_SPI_I2S_TDM_ERR_ALREADY_RUNNING, <P>_SPI_I2S_TDM_ERR_UNSUPPORTED_CONFIG, <P>_SPI_I2S_TDM_ERR_TOPOLOGY, <P>_SPI_I2S_TDM_ERR_CLOCK_INIT, <P>_SPI_I2S_TDM_ERR_CLOCK_NOT_READY, <P>_SPI_I2S_TDM_ERR_PIN_CONFIG, <P>_SPI_I2S_TDM_ERR_CLC, <P>_SPI_I2S_TDM_ERR_DMA_CONFIG, <P>_SPI_I2S_TDM_ERR_NOT_OPEN, <P>_SPI_I2S_TDM_ERR_ALREADY_OPEN, <P>_SPI_I2S_TDM_ERR_CONFIG_MODE
+enum <p>_spi_i2s_tdm_format_t	<P>_SPI_I2S_TDM_FORMAT_I2S, <P>_SPI_I2S_TDM_FORMAT_TDM
+enum <p>_spi_i2s_tdm_fs_shape_t	<P>_SPI_I2S_TDM_FS_PULSE, <P>_SPI_I2S_TDM_FS_50PCT
+enum <p>_spi_i2s_tdm_mirror_result_t	<P>_TDM_MIRROR_OK, <P>_TDM_MIRROR_UNSAFE_ACTIVE_HALF, <P>_TDM_MIRROR_UNRESOLVED_DMA_POSITION, <P>_TDM_MIRROR_BAD_ARGUMENT
+fn <p>_spi_i2s_tdm_close	bool(void)
+fn <p>_spi_i2s_tdm_configure_system	bool(const <p>_spi_i2s_tdm_leg_setup_t*,uint8_t)
+fn <p>_spi_i2s_tdm_consume_clock_event	<p>_spi_i2s_tdm_clock_event_t(void)
+fn <p>_spi_i2s_tdm_get_last_error	<p>_spi_i2s_tdm_error_t(void)
+fn <p>_spi_i2s_tdm_get_load	bool(<p>_spi_i2s_tdm_load_t*,bool)
+fn <p>_spi_i2s_tdm_get_status	bool(<p>_spi_i2s_tdm_status_t*,bool)
+fn <p>_spi_i2s_tdm_inst	<p>_spi_i2s_tdm_inst_t*(uint8_t)
+fn <p>_spi_i2s_tdm_inst_configure	bool(<p>_spi_i2s_tdm_inst_t*,const <p>_spi_i2s_tdm_config_t*)
+fn <p>_spi_i2s_tdm_inst_get_load	bool(<p>_spi_i2s_tdm_inst_t*,<p>_spi_i2s_tdm_load_t*,bool)
+fn <p>_spi_i2s_tdm_inst_get_setup	bool(const <p>_spi_i2s_tdm_inst_t*,<p>_spi_i2s_tdm_leg_setup_t*)
+fn <p>_spi_i2s_tdm_inst_get_status	bool(<p>_spi_i2s_tdm_inst_t*,<p>_spi_i2s_tdm_status_t*,bool)
+fn <p>_spi_i2s_tdm_inst_rx_isr	void(<p>_spi_i2s_tdm_inst_t*)
+fn <p>_spi_i2s_tdm_inst_start	bool(<p>_spi_i2s_tdm_inst_t*)
+fn <p>_spi_i2s_tdm_inst_stop	bool(<p>_spi_i2s_tdm_inst_t*)
+fn <p>_spi_i2s_tdm_inst_tx_active_half	int(<p>_spi_i2s_tdm_inst_t*)
+fn <p>_spi_i2s_tdm_inst_tx_active_pos	int32_t(<p>_spi_i2s_tdm_inst_t*)
+fn <p>_spi_i2s_tdm_inst_tx_fill_mirror	<p>_spi_i2s_tdm_mirror_result_t(<p>_spi_i2s_tdm_inst_t*,const <p>_spi_i2s_tdm_inst_t*,const <p>_tdm_slot_t*,<p>_tdm_slot_t**)
+fn <p>_spi_i2s_tdm_inst_tx_fill_ptr	<p>_tdm_slot_t*(<p>_spi_i2s_tdm_inst_t*)
+fn <p>_spi_i2s_tdm_instance_count	uint8_t(void)
+fn <p>_spi_i2s_tdm_is_active	bool(void)
+fn <p>_spi_i2s_tdm_is_running	bool(void)
+fn <p>_spi_i2s_tdm_open	bool(void)
+fn <p>_spi_i2s_tdm_set_block_callback	bool(<p>_spi_i2s_tdm_inst_t*,<p>_spi_i2s_tdm_block_cb_t,void*)
+fn <p>_spi_i2s_tdm_set_port	bool(const <p>_spi_i2s_tdm_port_t*)
+fn <p>_spi_i2s_tdm_spi1	<p>_spi_i2s_tdm_inst_t*(void)
+fn <p>_spi_i2s_tdm_spi2	<p>_spi_i2s_tdm_inst_t*(void)
+fn <p>_spi_i2s_tdm_spi3	<p>_spi_i2s_tdm_inst_t*(void)
+fn <p>_spi_i2s_tdm_spi4	<p>_spi_i2s_tdm_inst_t*(void)
+fn <p>_spi_i2s_tdm_start_all_domains	bool(void)
+fn <p>_spi_i2s_tdm_start_domain	bool(uint8_t)
+fn <p>_spi_i2s_tdm_stop_all_domains	bool(void)
+fn <p>_spi_i2s_tdm_stop_domain	bool(uint8_t)
+fn <p>_spi_i2s_tdm_tdmsum_configure	void(uint32_t)
+fn <p>_spi_i2s_tdm_tdmsum_get	bool(<p>_spi_i2s_tdm_tdmsum_t*,bool)
+fn <p>_spi_i2s_tdm_tdmsum_reset	void(void)
+inline <p>_tdm_slot_decode_s32	int32_t(const <p>_tdm_slot_t*)
+inline <p>_tdm_slot_encode_s32	void(<p>_tdm_slot_t*,int32_t)
+inline <p>_tdm_slot_scale_q15	void(const <p>_tdm_slot_t*,<p>_tdm_slot_t*,uint16_t)
+opaque <p>_spi_i2s_tdm_inst_t	opaque struct
+type <p>_spi_i2s_tdm_config_t	<p>_spi_i2s_tdm_format_t format; <p>_spi_i2s_tdm_clock_role_t clock_role; uint8_t slots_per_fs; uint8_t word_bits; <p>_spi_i2s_tdm_fs_shape_t fs_shape; uint16_t block_frames; uint32_t brg; bool mclk_enable; bool fs_coincides_first_bclk; bool bclk_idle_high; bool bclk_change_on_active_to_idle
+type <p>_spi_i2s_tdm_leg_setup_t	<p>_spi_i2s_tdm_config_t stream; uint8_t sync_domain
+type <p>_spi_i2s_tdm_load_t	uint32_t last_count; uint32_t min_count; uint32_t max_count; uint32_t event_count; uint32_t last_us10; uint32_t min_us10; uint32_t max_us10
+type <p>_spi_i2s_tdm_port_t	bool configure_pins(<p>_spi_i2s_tdm_clock_role_t); bool clc_passthrough(<p>_spi_i2s_tdm_clock_role_t); bool clock_source_init(<p>_spi_i2s_tdm_clock_role_t); bool clock_source_ready(<p>_spi_i2s_tdm_clock_role_t); <p>_spi_i2s_tdm_clock_event_t consume_clock_event(void)
+type <p>_spi_i2s_tdm_status_t	bool active; bool running; uint32_t block_count; uint32_t block_deadline_miss_count; uint32_t rx_dma_overrun_count; uint32_t rx_dma_other_irq_count; uint32_t rx_dma_last_status; uint32_t err_rov_block_count; uint32_t err_tur_block_count; uint32_t err_frm_block_count; uint32_t frmerr_consecutive_blocks; <p>_spi_i2s_tdm_load_t load
+type <p>_spi_i2s_tdm_tdmsum_t	uint32_t window_period_ticks; uint32_t max_busy_ticks; uint32_t saturated_count; bool initialized
+type <p>_tdm_slot_t	int32_t
