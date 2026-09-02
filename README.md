@@ -35,6 +35,13 @@ The primary target — the board on the bench:
 | `CK64MC105_EV88G73A` | **Primary, and the default build.** Hardware-verified: UART, I2C, TDM8/WM8904 audio, AVAS synth, traps | dsPIC33CK64MC105 / EV88G73A Curiosity Nano |
 | `CK256MP508_DM330030` | Where the lab started; kept building as the roomy configuration (it catches what the 64 KB part hides), but **never run — no board here**. DFP `dsPIC33CK-MP_DFP 1.15.423` | dsPIC33CK256MP508 / DM330030 Curiosity |
 
+### Bench setup
+
+The primary hardware setup is the EV88G73A Curiosity Nano on a mikroBUS
+extension board with the WM8904 codec board attached:
+
+<img src="docs/images/dspic33ck-snap001.jpg" alt="dsPIC33CK Curiosity Nano with the WM8904 mikroBUS codec board" width="600">
+
 The MC105 profile has its own DFP, linker script and output directory, and
 intentionally does not reuse DM330030 pin assignments. See
 [`docs/ck_hal_ports_from_ak.md`](docs/ck_hal_ports_from_ak.md), "Build profiles".
