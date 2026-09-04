@@ -1,9 +1,7 @@
 /*
  * system_console.c -- console module 's': system.
  *
- * Was app/console_system.c. Renamed with the move to uart_app/ because
- * dspic33ak-audio-dsp-sonora's uart_app/system_console.c owns the same letter
- * for the same purpose, ?sr included.
+ * System console module. `?sr` reports reset information for this profile.
  *
  *   *sr  software reset
  *   ?sr  why this boot happened (reset cause + raw RCON)

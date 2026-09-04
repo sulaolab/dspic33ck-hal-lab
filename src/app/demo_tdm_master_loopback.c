@@ -33,12 +33,9 @@
  *                order is readable by inspection with no 1-BCLK features to alias at
  *                50 MS/s: high half first -> the burst OPENS with 16 BCLK high then goes low;
  *                low half first -> it opens with 16 BCLK LOW (merging into the silent gap)
- *                and the high run appears second. **The high half leads, as it must** -- and
- *                this pattern is what proved it: before defect 7 was fixed the burst opened
- *                with 16 BCLK LOW. It is the default so that regression test stays one
- *                rebuild away. Check the burst also ENDS ~64 BCLK after the FS edge: that is
- *                what distinguishes a swap inside the slot from a 16-BCLK delay of the whole
- *                stream. See docs/ck_silicon_findings.md defect 7.
+ *                and the high run appears second. **The high half leads, as it must**. Check
+ *                that the burst also ENDS ~64 BCLK after the FS edge: that distinguishes a
+ *                swap inside the slot from a 16-BCLK delay of the whole stream.
  *
  *   0x8001_7FFE  BOUNDARY MARKING (select with -D). MSB-first on the wire:
  *
@@ -213,8 +210,7 @@ static void demo_block_cb(const nora_tdm_slot_t *src,
      * Filling only slots 1 and 2 leaves the rest of the frame silent, so the data is an
      * isolated 2-slot burst followed by a long low gap (6 slots = 192 BCLK at TDM8). The
      * first rising edge out of that gap is unambiguously the start of slot 1 -- the landmark
-     * the FS edge is compared against. That is what closed the alignment question; see
-     * docs/ck_silicon_findings.md Part 1.
+     * the FS edge is compared against.
      */
     for (i = 0u; i < DEMO_HALF_SAMPLES; i++) {
         const size_t slot = i % (size_t)NORA_TDM_SLOTS_PER_FS;
@@ -296,7 +292,7 @@ void demo_tdm_master_loopback_start(const demo_tdm_master_loopback_port_t *port)
      * resets gave an identical picture, so the J-K startup phase is deterministic and
      * correct. Flip this one line to ..._FS_PULSE for the CLC-free comparison -- nothing
      * else needs to change, and it is still the quickest way to separate a framing question
-     * from a slot-contents one. See docs/ck_silicon_findings.md Part 1. */
+     * from a slot-contents one. */
     cfg.format                        = NORA_SPI_I2S_TDM_FORMAT_TDM;
     cfg.clock_role                          = NORA_SPI_I2S_TDM_CLOCK_MASTER;
     cfg.slots_per_fs                  = NORA_TDM_SLOTS_PER_FS;

@@ -18,25 +18,20 @@ extern "C" {
  * HAL calls of any kind. The whole file is integer arithmetic over a state struct the
  * caller owns. Only the names said EV88G73A.
  *
- * File named after dspic33ak-audio-dsp-sonora's src/apps/classic/dsp/gain_ctrl.c,
- * which this is a fixed-point port of: same state-machine shape (a ramp restarts from
- * the current gain toward the new target; ramp_ms == 0 applies immediately), same
- * mute_on/storedGain policy.
+ * Fixed-point gain controller. A ramp restarts from the current gain toward the
+ * new target; ramp_ms == 0 applies immediately, and mute_on preserves the
+ * configured gain for later restoration.
  *
- * The SYMBOLS are prefixed gain_ctrl_* rather than copying upstream's bare
- * gain_init() / mute_set() / audiogain_t, and that is deliberate: upstream's are
- * float-based and this is fixed-point, so the two could not share a struct anyway -- and
- * if the float original is ever vendored into this repo alongside, identical global names
- * would collide at link time. Same file name for grep, distinct symbols for the linker.
+ * Symbols are prefixed gain_ctrl_* so this fixed-point module remains distinct
+ * from a floating-point gain implementation and cannot collide at link time.
  *
  * WHAT CHANGED 2026-08-06: Q31-per-frame LINEAR -> Q15-per-block EXPONENTIAL
  * -------------------------------------------------------------------------
  * The previous version stored gain as Q31 and applied it as
  * `((int64_t)sample * gain) >> 31`. That >>31 is the whole problem: it forces the
  * multiply to 64 bits, and XC16 implements it as a call to `___muldi3` -- a full 64x64
- * signed multiply, measured at about 88 cycles PER SAMPLE, 63% of the block ISR (see
- * docs/ck_silicon_findings.md, "___muldi3: a typing decision costing 88 cycles per
- * sample"). On this core a 16x16 multiply is ONE cycle. The multiply was never the cost;
+ * signed multiply, measured at about 88 cycles PER SAMPLE, 63% of the block ISR. On this
+ * core a 16x16 multiply is ONE cycle. The multiply was never the cost;
  * the shift WIDTH was.
  *
  * So gain is now Q15, where unity is 0x8000 and `>>16` is free (it is just naming the
@@ -126,8 +121,8 @@ typedef struct {
 void gain_ctrl_init(gain_ctrl_t *g, uint32_t sample_rate_Hz, uint16_t block_frames);
 
 /*
- * Mirrors upstream gain_ctrl.c's mute_set(): mute_on selects target 0 vs storedGain, then
- * starts (or immediately applies, if ramp_ms == 0) a ramp.
+ * mute_on selects target 0 versus the stored gain, then starts (or immediately
+ * applies, if ramp_ms == 0) a ramp.
  *
  * ramp_ms is snapped to the nearest available curve rather than realised exactly -- the
  * curves are the shift pairs in gain_ctrl.c's table, and at 48 kHz/32 frames they land on
@@ -178,7 +173,7 @@ int32_t gain_ctrl_next_frame_gain(gain_ctrl_t *g);
  * touches no peripheral, which is what makes that safe.
  *
  * Takes plain int32_t sample buffers. On dsPIC33CK the TRANSPORT's buffer element is not
- * an int32_t (it is a wire slot -- see nora_tdm_slot_t, defect 7), so a caller
+ * an int32_t (it is a wire slot -- see nora_tdm_slot_t), so a caller
  * feeding this straight from a TDM ping/pong half will not compile. That is deliberate:
  * this module is a fixed-point port of sonora's float gain_ctrl and is shared in spirit
  * with the AK side, where no such type exists. Coupling it to one part's DMA layout would

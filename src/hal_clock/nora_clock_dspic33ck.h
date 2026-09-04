@@ -13,9 +13,8 @@
  * must NOT use: this silicon's diagnostic codes, and the raw oscillator control
  * words for a post-mortem.  Nothing here is required to build against the contract.
  *
- * WHERE THE CONTRACT COMES FROM, AND HOW DRIFT IS DETECTED
- *   The nora_clock.h next to this file is a VENDORED copy of the dsPIC33AK-side
- *   definition of the NORA clock contract, whose published form is the
+ * CLOCK CONTRACT
+ *   The nora_clock.h next to this file defines the NORA clock contract. Its published form is the
  *   nora-hal-dspic33ak-clock repository.  Byte-identity with the snapshot it was
  *   taken from is the point rather than a convenience: it makes divergence a diff
  *   instead of a reading exercise.  The snapshot is identified by the STORED blob,

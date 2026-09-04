@@ -4,10 +4,8 @@
  *   ?gv  protocol/version line of the running image
  *   ?gh  liveness hello followed by the CK help text
  *
- * Split out of console_dispatch.c when the console moved to uart_app/, and named
- * after dspic33ak-audio-dsp-sonora's uart_app/general_console.c, which owns the
- * same letter for the same two things (?gv version, ?gh liveness).  CK deliberately
- * retains its existing help text after the hello line, so local interactive use does
+ * General console module for `?gv` version and `?gh` liveness. It retains the
+ * profile-specific help text after the hello line, so local interactive use does
  * not lose the only command inventory built into small images. Same reasoning as the
  * other module files: the dispatcher should answer "which letters exist", not
  * implement one of them.

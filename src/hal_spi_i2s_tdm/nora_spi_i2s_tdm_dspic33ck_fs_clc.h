@@ -17,7 +17,7 @@
 //
 // It routes PPS through hal_gpio/nora_pps.h (2026-08-03). It used to be self-contained
 // (xc.h only) with its own IOLOCK sequence and its own per-device RPORx-slot -> RPn tables,
-// on the grounds that the transport HAL should stay vendoring-portable. That cost more than
+// on the grounds that the transport HAL should stay portable. That cost more than
 // it bought: the private copy of the register map is where the non-contiguous-RP bug above
 // lived, and a second copy of a device fact is a second chance to get it wrong. The PPS HAL
 // is a sibling within the same hal_gpio family and travels with it, so the dependency is

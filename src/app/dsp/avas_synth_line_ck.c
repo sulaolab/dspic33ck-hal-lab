@@ -9,7 +9,7 @@
  * The two hot functions carry __attribute__((optimize("O3"))) rather than
  * relying on the project's level, and that is load-bearing, not a flourish:
  *
- *   - Measured on this repo's hardware (docs/ck_silicon_findings.md, Part 5), a
+ *   - On the supported hardware, a
  *     tight table loop costs 52.7 us at -Os against 16.5 us at -O3 -- 3.2x.  The
  *     estimate for this engine was ~46 % of the block budget at -O3, which becomes
  *     an overrun at -Os. That estimate HELD: the engine's measured increment is

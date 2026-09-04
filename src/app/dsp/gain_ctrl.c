@@ -96,14 +96,14 @@ static int32_t local_state_to_q31(uint32_t state)
  * The identity, not the instruction count, is the point: this is the SAME arithmetic as
  * the transport header's nora_tdm_slot_scale_q15(), which the audio ISR uses on wire
  * slots. Two code paths that scale audio differently would make the measurement in
- * docs/ck_silicon_findings.md meaningless, so they are kept in step deliberately.
+ * docs/ck_hardware_notes.md meaningless, so they are kept in step deliberately.
  */
 static int32_t local_scale_q15(int32_t x, uint16_t gain_q15)
 {
 #if defined(__XC16__)
     /* XC16 will not reach the native 16x16 instructions from portable C here: any
      * expression wide enough to hold the product is promoted to 64 bits and becomes a
-     * ___muldi3 call (~88 cycles/sample, measured -- see docs/ck_silicon_findings.md).
+     * ___muldi3 call (~88 cycles/sample, measured -- see docs/ck_hardware_notes.md).
      * The builtins ARE the fix, so they are written out rather than hoped for. */
     const int32_t  hi = __builtin_mulsu((int16_t)(x >> 16), gain_q15);
     const uint32_t lo = __builtin_muluu((uint16_t)x, gain_q15);
@@ -247,8 +247,8 @@ void gain_ctrl_mute_set(gain_ctrl_t *g, bool mute_on, uint32_t ramp_ms)
     g->mute_on = mute_on;
     g->target  = mute_on ? 0u : local_q31_to_state(g->storedGain);
 
-    /* ramp_ms == 0 means "now", and a target we are already at needs no ramp. Both are
-     * kept from upstream's mute_set() so the state machine cannot be left RAMPING with
+    /* ramp_ms == 0 means "now", and a target we are already at needs no ramp. This keeps
+     * the state machine from being left RAMPING with
      * nothing to do -- which would cost a step's arithmetic every block, forever. */
     if ((ramp_ms == 0u) || (g->target == g->state)) {
         local_finish_ramp_now(g);

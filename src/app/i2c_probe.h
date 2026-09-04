@@ -28,7 +28,7 @@ extern "C" {
  *   COLLISION    an idle bus with no device and no bus capacitance. Collapsing distinct
  *                outcomes into one verdict is how a diagnosis goes wrong later -- the
  *                same reason the DMA self-test separates "did not transfer" from
- *                "transferred, data wrong" (docs/ck_silicon_findings.md).
+ *                "transferred, data wrong" (docs/ck_hardware_notes.md).
  *
  * WAS boards/ev88g73a/ev88g73a_i2c1_probe.{c,h}
  * --------------------------------------------

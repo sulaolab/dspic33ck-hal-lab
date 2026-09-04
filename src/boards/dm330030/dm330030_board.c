@@ -296,8 +296,7 @@ void dm330030_board_init(void)
  * at boot before any pin stage ran. ANSELx's POR state is analog for every implemented
  * bit, so the sweep was "make the whole device digital, then hand the exceptions back".
  *
- * WHY IT WENT -- the same reason it went on the AK side of the fleet
- * (dspic33ak-audio-dsp-sonora main 34f6080..fe46e0e): ANSEL IS PART OF WHAT A PIN IS,
+ * WHY IT WENT -- ANSEL IS PART OF WHAT A PIN IS,
  * so its owner must be the stage that configures the pin, and a boot-time sweep gives
  * every pin TWO owners. The concrete cost was not the 80 writes; it was that a pin
  * could reach a working digital state without any code saying so, so the code no
@@ -478,9 +477,8 @@ bool dm330030_tdm_pins_init(nora_spi_i2s_tdm_clock_role_t role)
  *      moves FREF out from under those constants. The 12.5 figure came from this file's
  *      own unrelated arithmetic (256 x fs at fs ~= 48.8 kHz), not from the driver.
  *
- *   3. THE DIRECTION. dspic33ak-audio-dsp-sonora solves the same problem on the
- *      same codec, and its board layer NEVER GENERATES MCLK -- board/audio/audio.c's
- *      board_route_mclk() only ROUTES an existing clock through a CLC, and in the
+ *   3. THE DIRECTION. The board layer must not generate MCLK here; it only ROUTES
+ *      an existing clock through a CLC, and in the
  *      codec-master case routes NOTHING, with the reason spelled out: "The dsPIC must NOT
  *      drive B's MCLK net ... so it cannot contend with the jumper-supplied XTAL on B's
  *      MCLK." That is precisely what this function did. Its own header states the axis

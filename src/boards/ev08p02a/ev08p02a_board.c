@@ -275,7 +275,7 @@ static bool ev08p02a_uart1_pins_init(void)
  *   - The peripheral is initialised even when the pin stage failed, so that a debugger
  *     can read BRG and the enables and tell "wrong rate" from "wrong pin".
  *
- * This was recorded as OUT OF SCOPE for the convergence series (docs/ck_src_layout.md,
+ * This was recorded as OUT OF SCOPE for the convergence series (docs/ck_source_layout.md,
  * "a different path, not a different parameter") on the grounds that DM330030's console
  * is printf and this board's is not. That held for the WRITE side and was over-applied:
  * uart_platform_stdio.c was already compiled into this configuration -- ex="false" in
@@ -502,7 +502,7 @@ bool ev08p02a_i2c1_init(void)
      * timeout reads 0. Left as it is rather than quietly wired to GetTicks(): a running
      * 1 ms time now exists in both profiles (app/timer_app.h), so this CAN be honoured,
      * but turning a dead timeout live changes I2C failure behaviour and wants its own
-     * hardware pass. Recorded in docs/ck_src_layout.md.
+     * hardware pass. Recorded in docs/ck_source_layout.md.
      */
     cfg.timeout_ms         = 10u;
     cfg.get_ms             = NULL;

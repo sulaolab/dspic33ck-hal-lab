@@ -23,7 +23,7 @@
  *   double as PGC1/PGD1, which on a Curiosity Nano board are wired to the
  *   on-board debugger -- reusing them for I2C would contend with that. This is
  *   the same choice the DM330030 profile's mikroBUS-A I2C1 makes (see
- *   docs/ck_src_layout.md Sec.4), confirmed against this part's
+ *   docs/ck_source_layout.md Sec.4), confirmed against this part's
  *   own DFP (DSPIC33CK256MC005.PIC): ALTI2C1 = ON selects ASDA1/ASCL1 (field=0),
  *   OFF selects the default SDA1/SCL1 pins (field=1) -- opposite of what the
  *   bit's raw datasheet description reads at face value, so read the pragma's

@@ -109,7 +109,7 @@
  *
  * Both existed to debug a transport core that is now hardware-verified, so neither had
  * a remaining job. What is worth keeping from them is written down, not kept as code:
- * docs/ck_silicon_findings.md.
+ * docs/ck_hardware_notes.md.
  *
  * Default (1) is in board_profile.h; override with -DDEMO_ENABLE_WM8904_AUDIO=0.
  */
@@ -1298,8 +1298,8 @@ void profile_start(void)
      * Prove the DMA controller in isolation BEFORE any SPI work, so a stream that
      * does not run can be attributed without a second flash cycle: PASS means the
      * controller moves data and a fault is on the trigger/peripheral side; FAIL
-     * means stop investigating the SPI. This ordering is what found two of the
-     * three DMA defects in docs/ck_silicon_findings.md.
+     * means stop investigating the SPI. This ordering distinguishes a transport
+     * failure from a payload-layout failure.
      *
      * It REPORTS, it no longer gates. It used to skip the stage A/B/B2/C0 harness
      * on failure, and that gate was worth having because running those stages

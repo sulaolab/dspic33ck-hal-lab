@@ -18,12 +18,11 @@
 //===========================================================
 
 /*
- * Declick research one-shot restart-strategy bitmask, carried over from the upstream
- * driver's mute/restart pop-reduction work. 0 == baseline == the shipping behavior below;
+ * Declick research one-shot restart-strategy bitmask for mute/restart pop reduction.
+ * 0 == baseline == the shipping behavior below;
  * this lab never arms a mask (nothing here calls wm8904_set_pending_declick()), so the
  * WSEQ shutdown + manual startup sequence is always what runs. Kept rather than stripped
- * so this file stays a straightforward re-sync target against the upstream driver. Bits
- * may be OR-combined.
+ * so the complete strategy set remains available. Bits may be OR-combined.
  */
 typedef enum {
     WM8904_DECLICK_NONE            = 0x00u,  // shipping default: WSEQ shutdown + manual startup (see below)
@@ -37,8 +36,7 @@ typedef enum {
 } wm8904_declick_mask_t;
 
 /*
- * SHUTDOWN discharge policy (decided by measurement on the upstream driver's reference
- * board):
+ * SHUTDOWN discharge policy:
  *   default (mask NONE) = vendor Control Write Sequencer shutdown (Table 89), which does the full ordered
  *   VMID/charge-pump/bias power-down and suppresses the shutdown pop (~47 dB vs the old quench) and, by
  *   leaving the chip fully discharged, also cuts the following startup pop. WSEQ needs SYSCLK; it falls back
@@ -116,7 +114,7 @@ extern uint32_t wm8904_get_rate_hz( uint8_t inst );
  * (re)configure. `mask` is a bitwise-OR of wm8904_declick_mask_t. Set to WM8904_DECLICK_NONE (0)
  * for baseline. The mask persists until explicitly changed. Nothing in this lab calls
  * wm8904_set_pending_declick(), so it stays NONE and the shipping sequence always runs;
- * kept for parity with the upstream driver.
+ * kept for the complete restart-strategy interface.
  */
 extern void    wm8904_set_pending_declick( uint8_t mask );
 extern uint8_t wm8904_get_pending_declick( void );

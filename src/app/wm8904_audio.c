@@ -539,7 +539,7 @@ static void path_copy(const nora_tdm_slot_t *src,
  *
  * Still writes every slot of every block, deliberately: a "skip it, the half is already
  * zero from last time" test would make this path nearly free, and this path is the DOCUMENTED
- * BASELINE that the other two are compared against (docs/ck_silicon_findings.md). A baseline
+ * BASELINE that the other two are compared against (docs/ck_hardware_notes.md). A baseline
  * that stops doing the work stops being one. */
 static void path_mute(nora_tdm_slot_t *dst)
 {
@@ -1140,7 +1140,7 @@ void wm8904_audio_start(const wm8904_audio_config_t *cfg)
      * write/readback verified. Checked rather than discarded: arming the transport and
      * unmuting a codec that never confirmed its own ID is exactly the kind of
      * unverified assumption this lab's SPI/DMA bring-up was about
-     * (docs/ck_silicon_findings.md).
+     * (docs/ck_hardware_notes.md).
      */
     if (!wm8904_init(cfg->i2c_inst_legacy, /*master_cfg=*/!cfg->dspic_is_master)) {
         console_out_str(
@@ -1179,7 +1179,7 @@ void wm8904_audio_start(const wm8904_audio_config_t *cfg)
     if (cfg->dspic_is_master) {
         tcfg.clock_role        = NORA_SPI_I2S_TDM_CLOCK_MASTER;
         /* FS_50PCT engages the CLC1 50%-duty generator the master path was
-         * scope-verified with (docs/ck_silicon_findings.md). */
+         * scope-verified with (docs/ck_hardware_notes.md). */
         tcfg.fs_shape    = NORA_SPI_I2S_TDM_FS_50PCT;
         tcfg.brg         = cfg->brg;
     } else {
@@ -1316,8 +1316,7 @@ void wm8904_audio_start(const wm8904_audio_config_t *cfg)
      *
      * Its idle cost (the AVAS stage skipped) is the copy baseline plus the two-slot
      * decode/gain/encode, so the boot load line still reports a constant, and
-     * mute/copy/gain stay reachable, unchanged, as the documented baselines they are
-     * (docs/ck_silicon_findings.md Part 5).
+     * mute/copy/gain stay reachable, unchanged, as the documented baselines they are.
      */
     s_path         = (uint8_t)WM8904_PATH_CHAIN;
     s_tone_phase   = 0u;

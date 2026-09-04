@@ -5,9 +5,7 @@
  * switches on the MODULE letter and does nothing else. Every letter has a file of
  * its own beside this one.
  *
- * NOT the same shape as dspic33ak-audio-dsp-sonora, on purpose. There the switch lives
- * inside uart_app/app_debug.c, together with that project's own debug modules
- * ('n', 'm', 'i'). CK has no app_debug and no such modules, so a routing-only file
+ * The dispatcher is a routing-only file. CK has no app_debug module, so the switch
  * is what is left -- and a router with nothing else in it is worth keeping separate,
  * because it is the file you read to answer "which letters exist".
  *

@@ -43,8 +43,8 @@
  *   boards/dm330030/  -> printf(), which is already that board's console
  *
  * Note the PARSER (app_console.c) needs none of this -- it prints nothing at all.
- * Only command handlers produce output. That is why app_console.c could be
- * vendored from sonora without modification.
+ * Only command handlers produce output. The parser therefore remains independent
+ * of the output transport.
  */
 
 #include <stdbool.h>
@@ -85,8 +85,8 @@ extern "C" {
 /*
  * One character. Exists for the parser, not for handlers: app_console.c echoes
  * each received character, prints the '$' prompt, and emits the "\b \b" erase
- * sequence for a backspace -- six single-character writes, all of which were
- * putchar() upstream. Routing them here is what keeps stdio out of the console.
+ * sequence for a backspace -- six single-character writes. Routing them here
+ * keeps stdio out of the console.
  *
  * '\n' is translated here too, deliberately, so that the layer has ONE rule instead
  * of a per-function exception. The visible consequence is in the echo: a terminal

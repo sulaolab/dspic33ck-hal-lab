@@ -4,9 +4,9 @@
 /*
  * wm8904_port.h -- dspic33ck-hal-lab port shim for the WM8904 driver.
  *
- * The WM8904 register driver (wm8904.c/.h/_def.h) is ported verbatim from the
- * upstream dsPIC33AK firmware. That project pulls its timing helpers, trace output and
- * audio-format switches from the app layer (app_specific_config_defs.h,
+ * The WM8904 register driver (wm8904.c/.h/_def.h) receives its timing helpers,
+ * trace output, and audio-format switches from this application's configuration layer
+ * (app_specific_config_defs.h,
  * timer_app.h, ...). This lab has no such app layer, so this single header
  * supplies the small set of symbols wm8904.c depends on, keeping the driver
  * body a near-verbatim copy.
@@ -21,8 +21,7 @@
 #include <stdio.h>
 
 /*
- * GetTicks() comes from the app layer, exactly as it does upstream (that project's
- * timer_app.h, named in the note above). Until 2026-08-03 this file DEFINED it instead --
+ * GetTicks() comes from the app layer. Until 2026-08-03 this file DEFINED it instead --
  * a static inline over nora_tick_timer_get_ms() -- which made a codec driver's port
  * shim the only place in the tree that could tell the time, and left it returning 0 in
  * every profile that did not happen to start the timer. app/timer_app.h is now that home,
@@ -47,8 +46,8 @@
 
 /* --- Audio-interface framing this lab configures the WM8904 for -----------
  * Passthrough (ADC->DAC) demo runs TDM8 / 32-bit / no 1-bit delay, matching the
- * dsPIC SPI slave transport (8 slots). These mirror the upstream APP_* switches so
- * the driver body compiles unchanged. Override with -D before this header if a
+ * dsPIC SPI slave transport (8 slots). These APP_* switches select the transport
+ * format used by this driver. Override with -D before this header if a
  * future demo needs I2S. wm8904.c's #if RESOLVED_TRANSPORT_SLOTS_PER_FRAME/
  * DATA_DELAY_BITS checks were renamed to these two directly (they are the same
  * value under a different name, not a separate concept -- see wm8904.c). */
@@ -62,14 +61,13 @@
 #define APP_SLOTS_PER_FS     8      /* TDM8 */
 #endif
 
-/* --- Board-specific analog choices the upstream driver's newer config path added ---
+/* --- Board-specific analog choices ------------------------------------------
  * Both are explicit rather than left undefined-as-0: an undefined macro in an #if is
  * silently 0 in C, which happens to be the value wanted here, but "happens to" is not
- * a reason to omit it -- see docs/ck_silicon_findings.md's closing note on comments
- * (and here, absent macros) that disagree with what the code actually depends on.
+ * a reason to omit it when the code depends on an explicit value.
  *
- *   RESOLVED_BOARD_CODEC_INPUT_IS_RED_JACK : this lab has no board with the upstream
- *     reference PCB's dual RED/BLUE input jacks: 0 selects the BLUE (IN2) input path,
+ *   RESOLVED_BOARD_CODEC_INPUT_IS_RED_JACK : this lab has no board with dual
+ *     RED/BLUE input jacks: 0 selects the BLUE (IN2) input path,
  *     matching every WM8904 config this repo has run before this driver update.
  *   RESOLVED_BOARD_CODEC_MIC_BIAS_ENABLED  : the passthrough demo is line-in -> line-out,
  *     not a microphone path, so the MIC_BIAS supply stays off.
@@ -87,14 +85,13 @@
  * driver's own CMSIS branches were already inert here before this update (the previous
  * version's equivalent guard, ENA_CMSIS_I2C, was also never defined). */
 
-/* The upstream project uses COMPILEASSERT() for its format sanity checks. Map it to C's
- * _Static_assert so the same checks hold here. */
+/* Map format sanity checks to C's _Static_assert. */
 #ifndef COMPILEASSERT
 #define COMPILEASSERT(expr)  _Static_assert((expr), "WM8904 compile-time assertion failed")
 #endif
 
 /* --- TRACE: the driver's bring-up narration, and what it costs -------------
- * wm8904.c prints through TRACE, which upstream is plain printf(). On a 64 KB part that
+ * wm8904.c prints through TRACE rather than plain printf(). On a 64 KB part that
  * one line is not small. Measured on the EV88G73A image, two -Full builds of the same
  * commit with the same pinned -BuildId (2026-08-07): 64,284 B -> 54,780 B, i.e. 96% -> 82%
  * of flash, and 2,148 B of free flash became 11,652 B. The 9,504 B splits as:

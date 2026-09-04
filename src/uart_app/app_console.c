@@ -1,13 +1,9 @@
 /*
- * app_console.c -- VENDORED, near-verbatim, from dspic33ak-audio-dsp-sonora
- *   src/uart_uart_app/app_console.c
+ * app_console.c -- parser for the compact console command grammar
+ * (kind + module + name + hexadecimal payload).
  *
- * Kept byte-close to upstream on purpose: this is the command grammar the whole
- * fleet's consoles speak (kind + module + name + hex payload), and a small diff is
- * what makes re-vendoring an upstream fix cheap. Do not tidy it to CK house style;
- * behaviour changes belong upstream first.
- *
- * EVERY CHANGE FROM UPSTREAM, and why:
+ * This implementation keeps the grammar stable across the console modules.
+ * The platform-specific output changes are documented below:
  *
  *  - Dropped app_specific_config_defs.h and app_runtime_overrides.h. The latter is
  *    a GLOBAL "#define memcpy app_memcpy" / "memset app_memset" for buffers shared
@@ -21,12 +17,12 @@
  *    <stdio.h> accordingly. THIS IS THE ONE BEHAVIOURAL COUPLING CHANGE, so it is
  *    worth being precise about: the parser is not output-free. It echoes every
  *    received character, prints the '$' prompt, and emits the "\b \b" erase
- *    sequence on a backspace. All six are single-character writes and all six went
- *    to stdout upstream. Left as putchar() they would have pulled stdio into the
+ *    sequence on a backspace. All six are single-character writes. Left as putchar()
+ *    they would pull stdio into the
  *    EV88G73A baseline image, which deliberately avoids it on a 64 KB part -- and
  *    on a board with no printf retargeting they would have gone nowhere at all.
  *
- * Nothing else. The parsing, the grammar and the dispatch are upstream's.
+ * Parsing, grammar, and dispatch remain independent of the output transport.
  *
  * Handler REPLIES are not this file's business either way: it never formats one.
  * Those go through uart_platform/console_out.h as well, from whoever implements app_onmsg().
@@ -202,8 +198,8 @@ bool app_console_feed_char(uint8_t ch)
     n = app_console_print_response(&msg, out, (uint16_t)sizeof(out));
     // out to console.
     //
-    // Upstream is `fwrite(out, 1, n, stdout)`. Written as a loop over the seam
-    // because the response is a counted buffer, not a C string -- NUL-terminating
+    // Write over the output seam because the response is a counted buffer, not a
+    // C string -- NUL-terminating
     // it to reuse console_out_str() would be assuming a spare byte that
     // app_console_print_response() does not promise.
     {

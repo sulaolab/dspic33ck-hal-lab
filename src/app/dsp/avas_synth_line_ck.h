@@ -14,9 +14,8 @@
  * AVAS_TYPE_TY_CK_* spelling, because they are what every -Define line,
  * run_host_check.py, cost_probe and both docs already say.
  *
- * A port of dspic33ak-audio-dsp-sonora's src/apps/classic/dsp/avas_synth_type_ty.c,
- * which runs on dsPIC33AK.  The ALGORITHM is unchanged and the coefficients are the
- * same file; the ARITHMETIC is a rewrite, because AK has an FPU and CK does not.
+ * The algorithm and coefficient shape are shared with the floating-point AVAS
+ * implementation. The arithmetic is fixed-point here because dsPIC33CK has no FPU.
  *
  *     y(t) = sum_j AMP[j] * cos(2*pi*FRQ[j]*t + PHA[j])      j = 1..lines
  *          = sum_k Re{ e^{i 2 pi FC[k] t} * Z_k(t) }         k = 1..clusters
@@ -39,7 +38,7 @@
  * float engine costs 1900 cycles/sample WITH an FPU, so an instruction-for-
  * instruction port needs 93 % of the budget before the first soft-float call --
  * and one library multiply on this core was measured at 88 cycles/sample
- * (docs/ck_silicon_findings.md, Part 5).  Fixed point is not an optimisation
+ * on the supported hardware. Fixed point is not an optimisation
  * here, it is the reason the port is possible: a Q15 multiply-accumulate is one
  * cycle, and the phase wrap becomes free because integer overflow IS the modulo.
  *

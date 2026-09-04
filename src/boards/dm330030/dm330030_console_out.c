@@ -17,7 +17,7 @@
  * reporting: this configuration is APP_TRAPS_POLICY=2 (spin), so a trap halts silently
  * and the forced-trap commands (*xa, *xm, *xs) stop the board instead of reporting. That
  * is the next
- * parity item, not a property of this file. See docs/ck_silicon_findings.md.
+ * parity item, not a property of this file. See docs/ck_hardware_notes.md.
  *
  * Its hardware verification is deferred, so nothing here has run on the board.
  */

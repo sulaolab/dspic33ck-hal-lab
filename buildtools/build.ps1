@@ -18,9 +18,9 @@ tools MPLAB X drives:
     prjMakefilesGenerator.bat .          (xml -> nbproject/Makefile-<conf>.mk)
     make -f nbproject/Makefile-<conf>.mk .build-conf
 
-Same arrangement as dspic33ak-audio-dsp-sonora/buildtools/build.ps1. Adding or
-removing a source file is now done in the IDE (or by hand in the xml) and both
-build paths see it at once. There is nothing here to keep in sync.
+Adding or removing a source file is done in the IDE (or by hand in the xml), so
+the command-line and IDE build paths use the same configuration. There is no
+second source list to maintain here.
 
 WHAT STILL LIVES HERE
 ---------------------

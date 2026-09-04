@@ -1,10 +1,7 @@
 /*
  * diag_console.c -- console module 'd': diagnostics.
  *
- * Was app/console_diag.c; renamed to the fleet's shape for a module file
- * (dspic33ak-audio-dsp-sonora has uart_app/diag_console.c owning the same letter)
- * when the console moved to uart_app/. The commands differ -- sonora's 'd' is a register
- * dump, this one tests the timer -- but the role of the file is identical.
+ * Diagnostic console module. The `d` commands in this profile exercise the timer.
  *
  * WHY THIS IS NOT IN A BOARD DIRECTORY
  * ------------------------------------

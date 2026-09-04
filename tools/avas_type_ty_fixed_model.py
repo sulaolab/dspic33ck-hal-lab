@@ -20,9 +20,8 @@ Type_LB's driver over this module, not a second model.
 
 Why this exists
 ---------------
-The shipped engine (`dspic33ak-audio-dsp-sonora`'s
-`src/apps/classic/dsp/avas_synth_type_ty.c`) is float throughout and runs on a
-dsPIC33AK, which has an FPU.  dsPIC33CK has none, so a CK port is a rewrite of
+The reference engine is float throughout and runs on a target with an FPU.
+dsPIC33CK has none, so a CK port is a rewrite of
 the arithmetic.  Every quality figure quoted for the AK engine (48.0 dB below
 signal at D=32, -71.5 dBFS floor in the line-free bands) came from an offline
 model, not from hardware; this reuses that model's metric code.

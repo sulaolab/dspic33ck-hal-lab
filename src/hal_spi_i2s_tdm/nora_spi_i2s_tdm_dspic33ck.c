@@ -124,7 +124,7 @@ struct nora_spi_i2s_tdm_inst_s {
      */
     volatile uint16_t *spi_statl;
     // Wire slots, NOT int32_t samples: the DMA boundary is 16-bit wire words on this part.
-    // See nora_tdm_slot_t (defect 7).
+    // See nora_tdm_slot_t for the wire-order representation.
     nora_tdm_slot_t *rx_buffer;
     nora_tdm_slot_t *tx_buffer;
     uint32_t       buffer_slot_count;   // total SLOTS (2 * slots * blk) -- both ping+pong
@@ -515,7 +515,7 @@ bool nora_spi_i2s_tdm_is_active( void )
 
     // Stream-readiness gate routed through the clock port. No port (or no
     // clock_source_ready hook) => always ready (self-clocked, no external gate).
-    // The upstream platform wires this to the board's USB-audio clock readiness.
+    // A board may wire this to an external audio-clock readiness signal.
     // Pass the configured role. Before the first configure(), treat the transport
     // explicitly as SLAVE instead of relying on enum zero-initialization.
     if( ( stream->port != NULL ) && ( stream->port->clock_source_ready != NULL ) )
@@ -580,7 +580,7 @@ nora_spi_i2s_tdm_clock_event_t nora_spi_i2s_tdm_consume_clock_event( void )
     const tdm_stream_t *stream = &s_stream;
 
     // Routed through the clock port. No port (or no hook) => NONE (no external
-    // clock to detect). The upstream platform wires this to the board's RB15/CN edge.
+    // clock to detect). A board may wire this to an RB15/CN edge or equivalent event.
     if( ( stream->port != NULL ) && ( stream->port->consume_clock_event != NULL ) )
     {
         return stream->port->consume_clock_event();
@@ -2639,7 +2639,7 @@ static inline void tdm_get_dest_ptr( uint32_t       dma_tx_addr,
  * I2S + MASTER + FS_50PCT, whose generated FS is 25% duty on a 16-bit wire. See the
  * fs_shape block at the end of this function.
  *
- * TDM32 (32 slots/FS) WAS accepted and no longer is. Since audit defect 5 the serial wire
+ * TDM32 (32 slots/FS) is unsupported. The serial wire
  * word is 16 bits, so a 32-bit slot is two wire words and FS cadence is measured in wire
  * words: 32 slots needs FRMCNT to encode 64, and the field stops at 32 (log2 -> 5). This
  * is a real capability loss, not a tidy-up -- it is stated here rather than left to be
@@ -2694,7 +2694,7 @@ static bool tdm_config_is_supported( const tdm_spi_leg_t* leg, const nora_spi_i2
 
     // I2S + MASTER + FS_50PCT is REJECTED, and the reject is the point: this leg is the one
     // combination where the HAL would GENERATE a frame sync whose duty does not match the
-    // shape the caller asked for. Since audit defect 5 the wire word is 16 bits, so the
+    // shape the caller asked for. The wire word is 16 bits, so the
     // FRMSYPW=1 pulse hw_apply_config() programs for I2S is 16 BCLK out of a 64-BCLK
     // (2 x 32-bit) frame = 25%, not 50%. Returning true here would hand back a SUCCESS for a
     // 50%-duty request and then emit 25% -- a lying success is worse than a refusal, because

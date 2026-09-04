@@ -7,10 +7,8 @@
  * The board console's stdio side: brings up the console UART and retargets
  * printf() to it.
  *
- * Was app/console_stdio.{c,h}. Renamed with the move to uart_platform/ because
- * dspic33ak-audio-dsp-sonora has exactly this file under exactly this name
- * (src/uart_platform/uart_platform_stdio.c) doing exactly this job -- the libc
- * write() hook onto one fixed console UART instance through the UART HAL. When the
+ * The libc write() hook routes output to one fixed console UART instance through
+ * the UART HAL. When the
  * fleet already has a name for a thing, having a second one is just a translation
  * step for whoever reads both.
  *

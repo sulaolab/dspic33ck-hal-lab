@@ -8,7 +8,7 @@
  *
  * WHY THIS IS boards/dm330030/ AND NOT app/
  * -----------------------------------------
- * The move test the rest of this tree uses (see docs/ck_src_layout.md) is: grep
+ * The move test the rest of this tree uses (see docs/ck_source_layout.md) is: grep
  * the file for a pin, a port, a board register; if what comes back is VALUES, it
  * can move to app/ behind a seam. What comes back here is neither pins nor values
  * but three BOARD APIs -- dm330030_led3_rgb_set_color(), dm330030_led_*()/dm330030_sw_*(),

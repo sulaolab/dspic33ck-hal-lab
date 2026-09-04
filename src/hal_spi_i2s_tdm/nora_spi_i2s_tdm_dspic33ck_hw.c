@@ -166,7 +166,7 @@ void nora_spi_i2s_tdm_hw_apply_config( tdm_spi_inst_t inst,
     if( fs_50pct && is_i2s )
     {
         // FRMSYPW=1 = one WIRE WORD wide = 16 BCLK, which is 25% of a 64-BCLK (2 x 32-bit)
-        // I2S frame, NOT 50% -- MODE16 (defect 5) took that away. This path is therefore
+        // I2S frame, NOT 50% -- MODE16 makes the SPI marker one wire word wide. This path is therefore
         // only reachable as a SLAVE, where FS is an input and FRMSYPW describes how the
         // incoming FS is read: configure() rejects I2S + MASTER + FS_50PCT precisely so no
         // caller gets a 25% waveform in answer to a 50% request (tdm_config_is_supported).
@@ -212,11 +212,8 @@ void nora_spi_i2s_tdm_hw_apply_config( tdm_spi_inst_t inst,
     // FRMCNT counts SERIAL WIRE WORDS between frame syncs, not audio slots. The serial
     // word is 16 bits (MODE16, below) while an audio slot is 32, so ONE SLOT IS TWO WIRE
     // WORDS and fs_words -- computed above in slots -- has to be scaled before it can be
-    // encoded. This is why TDM8/32-bit is FRMCNT=4 (log2(16)) and not 3 (log2(8)); getting
-    // it wrong puts FS in the middle of a slot, which is precisely the failure the stage B
-    // harness (boards/ev88g73a/ev88g73a_spi_dma_min.c, since deleted) was built
-    // to detect. What it found is in the CK silicon findings note:
-    // https://github.com/sulaolab/dspic33ck-hal-lab/blob/main/docs/ck_silicon_findings.md
+    // encoded. This is why TDM8/32-bit is FRMCNT=4 (log2(16)) and not 3 (log2(8)); any
+    // other value puts FS in the middle of a slot.
     const uint16_t wire_words_per_slot = (uint16_t)((cfg->word_bits + 15u) / 16u);
     const uint16_t fs_wire_words       = (uint16_t)fs_words * wire_words_per_slot;
 
@@ -234,10 +231,7 @@ void nora_spi_i2s_tdm_hw_apply_config( tdm_spi_inst_t inst,
         // Unreachable through configure(): tdm_config_is_supported() bounds slots_per_fs
         // so that fs_wire_words is always a power of two in 1..32. If it is reached
         // anyway, FRMEN is CLEARED rather than a plausible-looking FRMCNT written -- an
-        // unframed stream is obviously broken, a mis-framed one looks like it works. (The
-        // old code silently substituted the TDM8 value here, which is the shape of every
-        // defect in the CK silicon findings note:
-        // https://github.com/sulaolab/dspic33ck-hal-lab/blob/main/docs/ck_silicon_findings.md)
+        // unframed stream is obviously broken, whereas a mis-framed one can appear to work.
         TDM_DBG_PRINTF(" ERROR: %u wire words/FS is not FRMCNT-encodable; framing OFF.\n",
                        (unsigned)fs_wire_words);
         nora_spi_i2s_tdm_reg_clear16(con1h, NORA_SPI_I2S_TDM_CON1H_FRMEN);
@@ -257,12 +251,12 @@ void nora_spi_i2s_tdm_hw_apply_config( tdm_spi_inst_t inst,
 
     // ---- CON1L: element width, buffering, clock/role ----
     //
-    // ENHBUF = 0 (audit defect 4). SPI FRM DS70005136, SPIxCON1L note 5: Standard Buffer
+    // ENHBUF = 0. SPI FRM DS70005136, SPIxCON1L note 5: Standard Buffer
     // mode is the ONLY mode permitted with DMA. In Enhanced Buffer mode SPIRBF/SPITBE mean
     // "FIFO endpoint reached" rather than "one element moved", so the DMA trigger no longer
     // corresponds to one transfer.
     nora_spi_i2s_tdm_reg_clear16(con1l, NORA_SPI_I2S_TDM_CON1L_ENHBUF);
-    // MODE16 = 1 / MODE32 = 0 (audit defect 5). A 32-bit slot cannot be fed through
+    // MODE16 = 1 / MODE32 = 0. A 32-bit slot cannot be fed through
     // SPIxBUFL alone: the 32-bit FIFO push is triggered by the SPIxBUFH access, and no CK
     // DMA addressing mode can alternate SPIxBUFL/SPIxBUFH while also advancing through the
     // buffer (there is no stride, and one RELOAD bit reloads SRC/DST/CNT together). So the
@@ -428,25 +422,25 @@ static bool hw_inst_valid( tdm_spi_inst_t inst )
  * CK DMA moves 16-bit elements; a 32-bit audio slot is two DMA half-words, so the
  * element count is buffer_slot_count * 2 and the data port is SPIxBUFL. RX copies
  * SPIxBUFL -> ping-pong buffer; TX copies buffer -> SPIxBUFL. The *2 is why the buffer
- * element is a two-uint16_t wire slot rather than an int32_t -- see defect 7 below.
+ * element is a two-uint16_t wire slot rather than an int32_t; see the wire-order
+ * explanation below.
  *
- * This channel configuration is HARDWARE-VERIFIED (EV88G73A 2026-07-29, stages A/B/B2/C0 of
- * https://github.com/sulaolab/dspic33ck-hal-lab/blob/main/docs/ck_silicon_findings.md): 16-bit elements at SPIxBUFL, Repeated One-Shot with
- * RELOAD, HALFEN on, CPU IRQ on RX only. Notably `DONEIF` DOES set at the reload boundary
+ * This channel configuration is hardware-verified for 16-bit elements at SPIxBUFL, Repeated
+ * One-Shot with RELOAD, HALFEN on, and CPU IRQ on RX only. Notably `DONEIF` does set at the
+ * reload boundary
  * on this silicon despite DMA FRM DS30009742C §6.1, so HALF -> first half / DONE -> second
- * half is correct and no re-arm is needed. Verified clean at 12.5 MHz over 4000 frames.
+ * half is correct and no re-arm is needed.
  *
- * ---- DEFECT 7, MEASURED AND FIXED: the DMA emits the LOW half-word first ----
- * ---- (scope, EV88G73A, 2026-08-03)                                       ----
+ * ---- WIRE ORDER: DMA emits the LOW half-word first ----
  *
  * The DMA walks the buffer in ascending address order and this core stores an int32_t
  * low-half-first (little-endian), which predicts the LOW 16 bits reach the wire first --
  * backwards from the MSB-first convention a TDM/I2S wire expects. **That prediction is what
  * actually happens.** An int32_t placed in these buffers goes out with its halves EXCHANGED.
  *
- * A loopback cannot see it (SDO->SDI returns whatever order it was given, and RX un-swaps it
- * symmetrically -- see stage B), which is why it survived this long. It matters against a
- * real codec: every sample would be half-word swapped, i.e. garbage.
+ * A loopback cannot see it because SDO->SDI returns whatever order it was given and RX
+ * reverses the same mapping symmetrically. It matters against a real codec: every sample
+ * would be half-word swapped.
  *
  * THE FIX IS IN THE BUFFER'S TYPE, not in this function. The DMA still moves 16-bit
  * elements in address order -- that is silicon, and unchangeable here. What changed is that
@@ -454,8 +448,7 @@ static bool hw_inst_valid( tdm_spi_inst_t inst )
  * members are declared in WIRE order (wire[0] first). Producers convert with
  * nora_tdm_slot_encode_s32() / _decode_s32() at the point where they already store or
  * load, which measured at ~2 extra instructions per sample; `dst[i] = sample;` no longer
- * compiles. See that type's comment, and defect 7 of
- * https://github.com/sulaolab/dspic33ck-hal-lab/blob/main/docs/ck_silicon_findings.md.
+ * compiles. See that type's comment for the representation contract.
  *
  * Note the acceptance test is a SCOPE reading, not the loopback: with
  * DEMO_TDM_TX_PATTERN=0xFFFF0000 the burst must open with 16 BCLK HIGH straight after FS.
@@ -474,35 +467,18 @@ static bool hw_inst_valid( tdm_spi_inst_t inst )
  * It is a SWAP WITHIN EACH SLOT, not a 16-BCLK delay of the whole stream -- the two look
  * identical for one slot, so check the END: the burst finishes ~64 BCLK after the FS edge
  * (~5.17 us), exactly two slots. A global 16-BCLK delay would run to FS+80 and spill into
- * slot 3. FS-to-slot-boundary framing is therefore CORRECT -- see the FS-alignment entry in
- * https://github.com/sulaolab/dspic33ck-hal-lab/blob/main/docs/ck_silicon_findings.md
- * -- and the fault is entirely inside the slot.
+ * slot 3. FS-to-slot-boundary framing is therefore correct and the fault is entirely inside
+ * the slot.
  *
- * This is the other half of defect 5, left behind by that fix. Defect 5 forced MODE16, which
- * makes a 32-bit slot two INDEPENDENT wire words ordered by however DMA reads memory; the fix
- * corrected FRMCNT (cadence) and never re-established MSB-first over the pair. Note the
- * hardware cannot be asked to do it: per defect 5, DMACHn.SIZE is ONE BIT (byte or 16-bit
- * word), so a 32-bit DMA element does not exist on this core and MODE32 cannot be DMA-fed.
+ * MODE16 makes a 32-bit slot two independent wire words ordered by DMA memory access. The
+ * hardware cannot reorder the pair: DMACHn.SIZE is one bit (byte or 16-bit word), so this
+ * core has no 32-bit DMA element and MODE32 cannot be DMA-fed.
  *
  * No swap is applied in THIS function, and none should be: the fix is the buffer's element
  * type (see above and nora_tdm_slot_t). The alternatives considered and rejected
  * were a swap pass in the HAL around the block callback (3-4x the cost, since it cannot fold
  * into a store the DSP is already doing) and declaring low-half-first the contract (pushes a
  * transport detail into audio code).
- *
- * HISTORY, and it is the instructive part. This block previously read "SETTLED: the HALFWORD
- * ORDER within a slot (scope, EV88G73A, 2026-07-30)" and asserted the HIGH half goes first
- * with "no half-word swap needed anywhere". That is the opposite of what the wire does. Its
- * justification was also unusable on its own terms: it credited "the SPI hardware's own
- * shift-register behaviour, triggered by the SPIxBUFH access", but this code never touches
- * SPIxBUFH -- spi_buf is &SPIxBUFL and is the sole DMA data port -- and its evidence lived in
- * ev88g73a_tdm_master_loopback.c's EV88G73A_TDM_SINE_GAIN_SHIFT/_HIGH_MARKER test, in a
- * board-private demo copy since deleted. **A confident conclusion whose stated mechanism does
- * not occur in the code is worth less than no comment at all**: this one was believed for four
- * days, and on 2026-08-03 it was briefly "re-confirmed" from a trace misattributed to the
- * wrong test pattern before the pattern was checked against the boot banner.
- * See Part 1 of
- * https://github.com/sulaolab/dspic33ck-hal-lab/blob/main/docs/ck_silicon_findings.md.
  */
 static bool hw_dma_config_channel( tdm_spi_inst_t inst, nora_dma_channel_t dma_ch, nora_tdm_slot_t *buffer, uint32_t count, bool is_rx )
 {

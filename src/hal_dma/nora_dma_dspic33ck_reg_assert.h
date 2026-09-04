@@ -23,7 +23,7 @@
  * Kept out of the HAL sources rather than pasted into them because the assertion
  * SET is device-scoped while the HAL is meant to be device-agnostic: a new CK
  * variant can supply its own without editing HAL logic, and this file can be
- * dropped or replaced when the HAL is vendored elsewhere. (xc.h already makes the
+ * dropped or replaced when the HAL is reused on another target. (xc.h already makes the
  * HAL DFP-dependent, so keeping DFP knowledge here is not a new dependency --
  * only a tidier place for it.)
  *

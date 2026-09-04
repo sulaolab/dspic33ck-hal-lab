@@ -26,7 +26,7 @@
  * half of the argument -- the other half is that nothing in it is EV88G73A's.
  *
  * (One of those two profiles, ev88g73a_tdm_master_loopback, has since been deleted;
- * see docs/ck_silicon_findings.md for what was kept from it.)
+ * see docs/ck_hardware_notes.md for what was kept from it.)
  *
  * Requires nora_high_res_timer to be initialised; everything degrades to
  * "n/a" if it is not.

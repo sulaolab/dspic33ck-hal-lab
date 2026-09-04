@@ -225,9 +225,8 @@ bool ev88g73a_tdm_pins_init(nora_spi_i2s_tdm_clock_role_t role);
  * THE ROLE SWAP DOES NOT CHANGE IT. WM8904 and the dsPIC can trade TDM master/slave on
  * either board -- that is what the role argument to ev88g73a_tdm_pins_init() is for, and
  * CK has run the master direction on hardware. Which side drives BCLK/FS says nothing
- * about where the codec's SYSCLK comes from; the fleet's own reference makes the axes
- * explicit (dspic33ak-audio-dsp-sonora board/audio/audio.c: MCLK's source "varies
- * by a BOARD/compile fact, NOT by any leg's master/slave role").
+ * about where the codec's SYSCLK comes from; MCLK source is a board/compile fact,
+ * not a transport leg's master/slave role.
  *
  * The reasoning that stood here is still right about one thing and it is worth keeping: an
  * empty stage returning true would claim a capability, and the next person to debug a

@@ -128,7 +128,7 @@ typedef struct
 // Frame format. Selects FRMCNT + the conventional FRMPOL used today.
 //
 // FRMCNT counts SERIAL WIRE WORDS, and the wire word is 16 bits while an audio slot is 32,
-// so one slot is TWO wire words (see hw.c / audit defect 5). Hence:
+// so one slot is TWO wire words. Hence:
 //   I2S  (2 slots) : 4 wire words  -> FRMCNT=010, FRMPOL active-low   (was ENA_FRMT_I2S)
 //   TDM8 (8 slots) : 16 wire words -> FRMCNT=100, FRMPOL active-high
 // Slot counts above 16 cannot be framed: 32 slots would need 64 wire words and FRMCNT
@@ -139,7 +139,7 @@ typedef enum {
 } nora_spi_i2s_tdm_format_t;
 
 // Bit-clock / frame-sync role.
-//   SLAVE  : MSTEN=0, FRMSYNC=1 (FS input)   -- external BCLK/FS (upstream today)
+//   SLAVE  : MSTEN=0, FRMSYNC=1 (FS input)   -- external BCLK/FS
 //   MASTER : MSTEN=1, FRMSYNC=0 (FS output)  -- self-clocked (starter target)
 typedef enum {
     NORA_SPI_I2S_TDM_CLOCK_SLAVE  = 0,
@@ -154,10 +154,9 @@ typedef enum {
 //                FRMSYPW=0, FRMCNT=slots_per_fs. No CLC.
 //   FS_50PCT   : 50%-duty FS, I2S LRCLK style.
 //                - I2S + MASTER: ** REJECTED by configure() ** with
-//                  ERR_UNSUPPORTED_CONFIG. FRMSYPW=1 is one WIRE WORD wide, and since audit
-//                  defect 5 forced MODE16 that is 16 BCLK out of a 64-BCLK (2 x 32-bit)
-//                  frame = 25%, not 50%. It was genuinely 50% back when MODE32 made one wire
-//                  word equal one slot. The fix is the same CLC half-frame-marker route the
+//                  ERR_UNSUPPORTED_CONFIG. FRMSYPW=1 is one WIRE WORD wide; in MODE16 that
+//                  is 16 BCLK out of a 64-BCLK (2 x 32-bit) frame = 25%, not 50%. The CLC
+//                  half-frame-marker route used by the
 //                  TDM master case already uses (FRMSYPW=0, marker every 2 wire words = 1
 //                  slot); it is NOT implemented, because the current target is TDM8 and an
 //                  unverified I2S path would be another untested claim. So rather than
@@ -170,11 +169,7 @@ typedef enum {
 //                - TDM (>=4 slots), MASTER: the SPI emits a 1-BCLK half-frame marker
 //                  (FRMSYPW=0, FRMCNT=slots_per_fs/2) that a CLC toggles into a 50%-duty FS
 //                  on the same FS pin. The HAL owns CLC1 + virtual pin RPV0 (see
-//                  nora_spi_i2s_tdm_fs_clc.*). NOTE: CLC1/RPV0 are the CK numbers --
-//                  AK's sibling HAL uses CLC10 + RPV8, and this text used to say so
-//                  incorrectly (carried over by the port; the CK silicon findings note's
-//                  "CLC1 50%-duty FS, measured" entry has always had the correct fact:
-//                  https://github.com/sulaolab/dspic33ck-hal-lab/blob/main/docs/ck_silicon_findings.md).
+//                  nora_spi_i2s_tdm_fs_clc.*).
 //                - TDM SLAVE: FS is an INPUT, so fs_shape is accepted but has no
 //                  generated-waveform effect (treated as normal slave framing). The CLC
 //                  50%-duty FS is generated only in master mode.
@@ -243,12 +238,12 @@ typedef enum {
 // The DMA buffer element on THIS family: ONE TDM SLOT IN WIRE ORDER
 //
 // A 32-bit audio slot does NOT live in the DMA buffers as an int32_t, and this type
-// exists to make that impossible to forget. Defect 5 forced MODE16, so the SPI's data
+// exists to make that impossible to forget. The SPI uses MODE16, so its data
 // port is the 16-bit SPIxBUFL and a 32-bit slot is TWO independent wire words. The DMA
 // walks the buffer in ascending address order, and this core is little-endian -- so an
 // int32_t in a DMA buffer transmits its LOW half FIRST, which is backwards from the
-// MSB-first convention every TDM/I2S wire uses. That was defect 7: real, measured on
-// EV88G73A, and invisible in loopback because RX un-swaps it symmetrically.
+// MSB-first convention every TDM/I2S wire uses. A loopback can mask this because RX
+// receives the same ordering that TX emitted.
 //
 // So the buffer element names the wire, not the host:
 //
@@ -259,10 +254,9 @@ typedef enum {
 //   - `dst[i] = sample;` for an int32_t sample is now a COMPILE ERROR rather than
 //     silently-wrong audio. That is the whole point of using a struct here.
 //   - Converting costs ~2 instructions per sample when folded into an existing store
-//     (measured, -Os; defect 7 of the CK silicon findings note). Do NOT add a separate
+//     (measured with -Os). Do NOT add a separate
 //     swap pass over the block -- that costs 3-4x more. Encode at the point where the
 //     DSP already stores its result, and decode where it already loads its input.
-//     https://github.com/sulaolab/dspic33ck-hal-lab/blob/main/docs/ck_silicon_findings.md
 //   - A raw passthrough needs NO conversion at all: `dst[i] = src[i]` copies a slot
 //     already in wire order.
 //
@@ -293,11 +287,10 @@ typedef enum {
 //  3. Fold the conversion into the store/load the DSP already performs; do not add a
 //     conversion pass. `for (i) encode(&dst[i], out[i])` is the shape the accessor
 //     vocabulary invites, and it is the shape that costs: measured here, a separate pass
-//     costs 3-4x a conversion folded into the DSP's own final store (see the bullet above
-//     and defect 7 of the CK silicon findings note). On AK encode/decode are the identity
+//     costs 3-4x a conversion folded into the DSP's own final store (see the bullet above).
+//     On AK encode/decode are the identity
 //     and cost nothing, which is exactly why an author there cannot see the trap -- hence it
 //     is stated in the shared contract rather than only in this backend's comments.
-//     https://github.com/sulaolab/dspic33ck-hal-lab/blob/main/docs/ck_silicon_findings.md
 //===========================================================
 typedef struct
 {
@@ -313,8 +306,7 @@ _Static_assert( sizeof(nora_tdm_slot_t) == 4u,
 // union is an optimisation detail, not part of this interface. It exists because it lets the
 // compiler treat the two halves as the W-register pair it already has; the obvious
 // alternative, a shift-based decode `(src->wire[0] << 16) | src->wire[1]`, compiles to
-// sl/clr/ior at THREE TIMES the cost (measured -- defect 7 of the CK silicon findings note,
-// https://github.com/sulaolab/dspic33ck-hal-lab/blob/main/docs/ck_silicon_findings.md).
+// sl/clr/ior at THREE TIMES the cost in measurements with -Os.
 // Keeping it local means no caller can accidentally build a half-swapped value by hand with
 // it, which is the failure mode this whole type exists to prevent.
 //
@@ -342,17 +334,14 @@ static inline int32_t nora_tdm_slot_decode_s32( const nora_tdm_slot_t *src )
 
 // Scale one slot by a Q15 gain (0 = silence, 0x8000 = unity) and store it back in WIRE
 // order. It lives here for the same reason encode/decode do: no caller should hand-build a
-// wire value (defect 7 above). A gain stage is the one DSP operation this repo's audio path
+// wire value manually. A gain stage is the one DSP operation this repo's audio path
 // runs on every slot of every block, so the loop that does it belongs next to the layout
 // knowledge it depends on.
 //
 // WHY Q15 AND NOT Q31. On this core a 16x16 multiply is ONE cycle and >>16 is FREE -- it is
 // just naming the high word of the product pair. A Q31 gain forces `((int64_t)x * g) >> 31`,
 // which XC16 compiles to a ___muldi3 call: a full 64x64 signed multiply, measured at ~88
-// cycles per sample and 63% of this ISR ("___muldi3: a typing decision costing 88 cycles per
-// sample" in the CK silicon findings note). The multiply was never the cost; the shift WIDTH
-// was.
-// https://github.com/sulaolab/dspic33ck-hal-lab/blob/main/docs/ck_silicon_findings.md
+// cycles per sample and 63% of this ISR. The multiply was never the cost; the shift WIDTH was.
 //
 // PRECONDITION: gain_q15 <= 0x8000 (unity). The type is uint16_t because that is the
 // multiplier's natural operand, NOT because values above unity are supported -- 0xFFFF would
@@ -410,7 +399,7 @@ static inline void nora_tdm_slot_scale_q15( const nora_tdm_slot_t *src,
 // src/dst are WIRE SLOTS, not int32_t samples -- see nora_tdm_slot_t above, and
 // use the encode/decode helpers. This is a lower-level contract than "here are your
 // samples", deliberately: on this part the DMA boundary IS 16-bit wire words, and hiding
-// that behind an int32_t buffer is exactly how defect 7 stayed hidden.
+// that behind an int32_t buffer is exactly how a wire-order error can stay hidden.
 typedef void (*nora_spi_i2s_tdm_block_cb_t)( const nora_tdm_slot_t* src,
                                                   nora_tdm_slot_t*       dst,
                                                   void*                            user );
@@ -432,7 +421,7 @@ typedef struct nora_spi_i2s_tdm_inst_s nora_spi_i2s_tdm_inst_t;
 // `running` is the true stream-running state -- set by start(), cleared by stop().
 // It is DISTINCT from `active`: `active`
 // (is_active()) is the clock/source-readiness gate (e.g. external USB audio clock
-// present) that the upstream main loop uses to decide whether streaming *should*
+// present) that the board application uses to decide whether streaming *should*
 // run, and it can read true while the stream is stopped. Read `running` for "is
 // the engine actually streaming", `active` for "is the clock source ready".
 typedef struct {

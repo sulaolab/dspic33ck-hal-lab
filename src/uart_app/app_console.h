@@ -2,36 +2,31 @@
 #define APP_CONSOLE_H
 
 /*
- * app_console.h -- ADAPTED from dspic33ak-audio-dsp-sonora's
- *   src/uart_app/app_console.h.
+ * app_console.h -- public declarations for the compact console grammar.
  *
- * Unlike app_console.c, which is vendored near-verbatim, this header is adapted:
+ * This header is adapted to the CK console implementation:
  *
- *  - Added <stdint.h> / <stdbool.h>. Upstream declares uint8_t, uint16_t and bool
- *    without including either, so it only compiles when the includer happens to
- *    have pulled them in first. A header that cannot be included on its own is a
- *    trap for the next caller.
+ *  - Include <stdint.h> / <stdbool.h> explicitly so uint8_t, uint16_t, and bool
+ *    never depend on include order. A header that cannot be included on its own
+ *    is a trap for the next caller.
  *  - APP_CONSOLE_MAX_CMD_LINE cut from 256 to 64. dsPIC33CK64MC105 has 8 KB of
  *    RAM and the EV88G73A image already uses 56% of it, so a 256-byte line buffer
  *    plus its 126-byte decoded payload is a quarter of the remaining headroom for
  *    a console that currently takes no argument longer than four hex digits. 64
  *    still leaves 30 payload bytes.
  *
- * The grammar, the message struct and the status codes are upstream's, unchanged:
- * that is the point of using them.
+ * The grammar, message structure, and status codes are shared by the console
+ * parser and its command handlers.
  */
 
 #include <stdint.h>
 #include <stdbool.h>
 
-
-
-
 // ---------------- Config (tie Data[] capacity to line length) --------------
 // One ASCII line: kind(1) + module(1) + name(1) + HEX... + '\n' -> 3 + 2*N + 1
 // If APP_CONSOLE_MAX_DATA_BYTES is not given, derive it from APP_CONSOLE_MAX_CMD_LINE.
-/* Upstream uses 256 (and mentions 384). See the header comment for why this is 64
- * here: 8 KB of RAM total, and the longest argument in sight is four hex digits. */
+/* The default is 64: this part has 8 KB of RAM and the longest supported argument
+ * is four hexadecimal digits. */
 #define APP_CONSOLE_MAX_CMD_LINE   (64u)
 #define APP_CONSOLE_MAX_DATA_BYTES (((APP_CONSOLE_MAX_CMD_LINE) > 4u) ? (((APP_CONSOLE_MAX_CMD_LINE) - 4u) / 2u) : 0u)
 

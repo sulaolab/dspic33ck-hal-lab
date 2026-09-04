@@ -139,10 +139,9 @@ typedef struct {
      * jumper position would program a SYSCLK/fs the hardware does not have (16 000 asks for
      * 768 while the true ratio stays 256). Nothing calls it in this profile today.
      *
-     * IF A BOARD EVER NEEDS THE MCU TO SOURCE ONE, do not restore this shape. The fleet
-     * already has the right one: dspic33ak-audio-dsp-sonora's board/audio/audio.c
-     * board_route_mclk() ROUTES an existing clock (CLC passthrough of a BCLK or of a
-     * dedicated MCLK net) and deliberately routes NOTHING in the codec-master case, and
+     * IF A BOARD EVER NEEDS THE MCU TO SOURCE ONE, use a board-routing seam that
+     * routes an existing clock (a CLC passthrough of BCLK or a dedicated MCLK net)
+     * and deliberately routes NOTHING in the codec-master case, and
      * it is keyed on board/compile facts rather than on any leg's role. A generator hook
      * invites exactly the defect deleted here: a second clock, at a frequency the
      * driver's rate tables do not use, contending with the codec's own crystal.
@@ -547,8 +546,8 @@ bool wm8904_audio_started(void);
 /*
  * WHAT THE BLOCK CALLBACK DOES, AT RUNTIME. A bring-up starts in `chain`, which is what this
  * board does in normal operation; the four single-purpose positions are one *tp away and are
- * kept unchanged, because they are the documented cost baselines
- * (docs/ck_silicon_findings.md Part 5) and a baseline that changes stops being one.
+ * kept unchanged, because they are the documented cost baselines and a baseline that
+ * changes stops being one.
  *
  * wm8904_audio_path_next() advances one position in a FOUR-position cycle and names where
  * it landed:

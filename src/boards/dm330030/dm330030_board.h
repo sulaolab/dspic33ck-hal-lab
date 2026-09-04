@@ -100,7 +100,7 @@ bool dm330030_tdm_pins_init(nora_spi_i2s_tdm_clock_role_t role);
  * THAT TABLE HAD A THIRD ROW UNTIL 2026-08-04, reading "(none -- codec has X1)" against
  * dm330030_mclk_init(), which contradicted the sentence directly above it: the same WM8904
  * board is on both, so its XTAL is on both. The MCLK stage is deleted, not converged -- see
- * the note in dm330030_board.c where it was, and docs/ck_src_layout.md. The table is now
+ * the note in dm330030_board.c where it was, and docs/ck_source_layout.md. The table is now
  * the whole of the audio seam, and it is symmetric.
  *
  * "mikroBUS-A" is still everywhere it belongs -- the comments on the pin macros, the

@@ -28,12 +28,18 @@
 **/nbproject/private/configurations.xml -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 **/nbproject/project.xml                -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 
-# Development-tree-only material, kept out of the public source snapshot
-# (`sulaolab/dspic33ck-hal-lab`, built with `git archive` of this tree).
-# The publish gate itself is the reason this block exists: manifest.yaml lists the
-# private repo and clone names, the non-public codename and the customer trademarks
-# it denies, so the tool that keeps the public surface clean is the last thing that
-# should be on it. The workflow runs that tool and describes the private pipeline,
-# so it goes with it. Kept in step with the dsPIC33AK fleet, which excludes both.
-tools/nora_hal_sync/ export-ignore
-.github/ export-ignore
+# Exclude non-public records and maintainer tooling from source archives. The
+# explicit recursive patterns also make per-path attribute checks unambiguous.
+tools/nora_hal_sync/** export-ignore
+.github/**             export-ignore
+docs_internal/**       export-ignore
+AGENTS.md               export-ignore
+CLAUDE.md               export-ignore
+.serial-monitor.json    export-ignore
+
+# These helpers are not required to build or use the public source tree.
+tools/publish/**        export-ignore
+tools/host_check/**     export-ignore
+tools/cost_probe/**     export-ignore
+buildtools/migrate_configurations_xml.ps1 export-ignore
+buildtools/add_board_ownership_guards.ps1  export-ignore

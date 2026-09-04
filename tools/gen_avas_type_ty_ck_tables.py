@@ -157,7 +157,7 @@ def pair_rows(a, b, per_line):
 # The gate's one-pole coefficient, as an int16 numerator plus a fixed shift, so
 # the per-sample update is ONE 16x16 multiply and a shift -- no 32x32, no
 # library call.  (The naive `(int64_t)alpha * err >> 31` is what pulls in
-# ___muldi3, measured at 88 cycles/sample in docs/ck_silicon_findings.md.)
+# ___muldi3, measured at 88 cycles/sample in docs/ck_hardware_notes.md.)
 #
 #   err_hi = err_q31 >> 16          (int16, Q15 of the error)
 #   d_gate = (err_hi * ALPHA_NUM) >> (ALPHA_SHIFT - 16)

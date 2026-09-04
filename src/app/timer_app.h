@@ -17,9 +17,7 @@
  * 32-bit millisecond rollover (~49.7 days): the DIFFERENCE stays right when the counter
  * wraps, whereas `GetTicks() >= last + INTERVAL_MS` stops firing for one interval and
  * `GetTicks() - last` on mixed types can be promoted to something signed. Use the form
- * above verbatim. It is the fleet's idiom -- dspic33ak-audio-dsp-sonora's
- * src/timer_app/ has the same file under the same name, and this one is deliberately
- * its CK counterpart so the two trees read alike.
+ * above verbatim. It keeps elapsed-time scheduling correct across the tick wrap.
  *
  * WHY IT IS HERE AND NOT IN A DRIVER. Until 2026-08-03 the only GetTicks() in this tree
  * was a static inline inside chip_drivers/wm8904_port.h -- a codec driver's porting shim.

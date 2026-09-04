@@ -210,7 +210,7 @@
  * build instead of reaching hw.c and disabling framing at runtime.
  *
  * FRMCNT counts SERIAL WIRE WORDS as log2(N) with N <= 32, and a 32-bit audio slot is TWO
- * 16-bit wire words (the wire is MODE16 -- see audit defect 5), so the cadence is
+ * 16-bit wire words (the wire is MODE16), so the cadence is
  * 2 * SLOTS_PER_FS wire words and SLOTS_PER_FS must be a power of two no greater than 16.
  * TDM32 was representable under the old MODE32 wire and is not anymore.
  */

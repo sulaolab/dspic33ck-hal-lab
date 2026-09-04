@@ -22,7 +22,7 @@ extern "C" {
  * the loop entirely: RAM -> RAM, triggered by software (DMACHn.CHREQ). A PASS narrows a
  * remaining transport failure to the trigger/peripheral side; a FAIL says stop looking
  * at the SPI. That ordering is what found two of the three DMA defects in
- * docs/ck_silicon_findings.md.
+ * docs/ck_hardware_notes.md.
  *
  * WAS boards/ev88g73a/ev88g73a_dma_selftest.{c,h}
  * ----------------------------------------------

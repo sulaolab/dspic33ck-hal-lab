@@ -99,7 +99,7 @@
  * input lands there.
  *
  * The reasons in full, including why 12.5 MHz was the wrong figure regardless, are in the
- * note where the stage was (dm330030_board.c) and in docs/ck_src_layout.md.
+ * note where the stage was (dm330030_board.c) and in docs/ck_source_layout.md.
  */
 
 /* ---- I2C1 control bus to the codec, on the ALTERNATE pair ASDA1/ASCL1 ----
