@@ -57,6 +57,82 @@
 #define DEMO_ENABLE_WM8904_AUDIO 1
 #endif
 
+/* Rev4/Rev5 XTAL_OUT -> RB0/OSCI and MPQ6612A in mikroBUS socket 3. The normal
+ * FRC/WM8904-only image stays the default. Enable with -Define
+ * EV08P02A_PWM_AUDIO=1 (ECPLL, X1->OSCI jumper) or add
+ * EV08P02A_PWM_AUDIO_HAL_FRC=1 (FRCPLL, no jumper). */
+#ifndef EV08P02A_PWM_AUDIO
+#define EV08P02A_PWM_AUDIO 0
+#endif
+#if (EV08P02A_PWM_AUDIO != 0) && (EV08P02A_PWM_AUDIO != 1)
+#error "EV08P02A_PWM_AUDIO must be 0 or 1"
+#endif
+/* Scope-only PWM: drive the socket 3 logic pins while nSLEEP stays low.
+ * This is a separate test ROM image; the normal MPQ build still checks nFAULT. */
+#ifndef EV08P02A_PWM_SCOPE_ONLY
+#define EV08P02A_PWM_SCOPE_ONLY 0
+#endif
+#if (EV08P02A_PWM_SCOPE_ONLY != 0) && (EV08P02A_PWM_SCOPE_ONLY != 1)
+#error "EV08P02A_PWM_SCOPE_ONLY must be 0 or 1"
+#endif
+#if EV08P02A_PWM_SCOPE_ONLY && !EV08P02A_PWM_AUDIO
+#error "EV08P02A_PWM_SCOPE_ONLY requires EV08P02A_PWM_AUDIO=1"
+#endif
+/* PWM implementation: always the hal_pwm_audio core + ev08p02a_pwm_audio_hal.c
+ * backend. The first-light ev08p02a_pwm_audio.c path and its switches
+ * (EV08P02A_PWM_AUDIO_HAL, _SCOPE_FRC, _ELASTIC_FIFO) were removed on
+ * 2026-10-15; EV08P02A_PWM_AUDIO_HAL_FRC covers the jumper-free FRCPLL case.
+ * A leftover EV08P02A_PWM_AUDIO_HAL=1 on an old command line is harmless and
+ * accepted; asking for the removed path (=0) or its switches is an error. */
+#if defined(EV08P02A_PWM_AUDIO_HAL) && (EV08P02A_PWM_AUDIO_HAL != 1)
+#error "EV08P02A_PWM_AUDIO_HAL=0 (ev08p02a_pwm_audio.c) was removed; the HAL path is the only PWM path"
+#endif
+#if defined(EV08P02A_PWM_SCOPE_FRC) || defined(EV08P02A_PWM_ELASTIC_FIFO)
+#error "EV08P02A_PWM_SCOPE_FRC/_ELASTIC_FIFO were removed; use EV08P02A_PWM_AUDIO_HAL_FRC=1 (FRCPLL, elastic FIFO)"
+#endif
+/* Independent FRCPLL clock for the MPQ board's HAL path. The backend keeps
+ * its duty FIFO elastic because the WM8904 TDM clock is crystal-derived. */
+#ifndef EV08P02A_PWM_AUDIO_HAL_FRC
+#define EV08P02A_PWM_AUDIO_HAL_FRC 0
+#endif
+#if (EV08P02A_PWM_AUDIO_HAL_FRC != 0) && (EV08P02A_PWM_AUDIO_HAL_FRC != 1)
+#error "EV08P02A_PWM_AUDIO_HAL_FRC must be 0 or 1"
+#endif
+#if EV08P02A_PWM_AUDIO_HAL_FRC && !EV08P02A_PWM_AUDIO
+#error "EV08P02A_PWM_AUDIO_HAL_FRC requires EV08P02A_PWM_AUDIO=1"
+#endif
+#define EV08P02A_PWM_CLOCK_FRC (EV08P02A_PWM_AUDIO_HAL_FRC)
+/* Repeat each 48 kHz duty sample for 1/2/4 carrier periods. */
+#ifndef EV08P02A_PWM_CARRIER_FACTOR
+#define EV08P02A_PWM_CARRIER_FACTOR 1
+#endif
+#if (EV08P02A_PWM_CARRIER_FACTOR != 1) && (EV08P02A_PWM_CARRIER_FACTOR != 2) && (EV08P02A_PWM_CARRIER_FACTOR != 4)
+#error "EV08P02A_PWM_CARRIER_FACTOR must be 1, 2, or 4"
+#endif
+/* Error-feedback quantizer order for the HAL PWM path: 0 = round, 1, 2.
+ * Default 0: the audible noise was lost PG4DC updates, not resolution, and
+ * order 2 costs ~70 us per DMA2 refill, which with Type_LB AVAS left the
+ * console unresponsive (2026-10-14). *cp5602 still selects it at run time. */
+#ifndef EV08P02A_PWM_NS_ORDER
+#define EV08P02A_PWM_NS_ORDER 0
+#endif
+#if (EV08P02A_PWM_NS_ORDER < 0) || (EV08P02A_PWM_NS_ORDER > 2)
+#error "EV08P02A_PWM_NS_ORDER must be 0, 1, or 2"
+#endif
+/* PWM-only audio gain is applied before PCM enters the shared HAL. */
+#ifndef EV08P02A_PWM_GAIN_DB_X10
+#define EV08P02A_PWM_GAIN_DB_X10 0
+#endif
+#if (EV08P02A_PWM_GAIN_DB_X10 < -240) || (EV08P02A_PWM_GAIN_DB_X10 > 240) || ((EV08P02A_PWM_GAIN_DB_X10 % 5) != 0)
+#error "EV08P02A_PWM_GAIN_DB_X10 requires -240..240 in 0.5 dB steps"
+#endif
+#if EV08P02A_PWM_AUDIO && !DEMO_ENABLE_WM8904_AUDIO
+#error "PWM audio needs the WM8904 final-output block"
+#endif
+#if EV08P02A_PWM_AUDIO && defined(EV08P02A_WM8904_DSPIC_IS_MASTER) && EV08P02A_WM8904_DSPIC_IS_MASTER
+#error "PWM audio first-light requires WM8904 master and 48 kHz from Rev4/Rev5 X1"
+#endif
+
 /*
  * Codec-less TDM master exerciser (the FS/alignment and DMA-throughput harness).
  * This is the one that also carries DEMO_TDM_TX_MODE (fixed / ramp / sine) -- that
@@ -121,9 +197,9 @@
  * the digital signal arrives 18.7 dB below full scale (measured, section 3 of that doc) --
  * a fact about this board's wiring and its codec register settings. A different board with
  * a different front end wants different numbers, which is the test for belonging here.
- * The AVAS synth's own level is NOT one of these: it is WM8904_AUDIO_AVAS_SHIFT inside
- * wm8904_audio.c, because it calibrates a synthesiser against full scale rather than
- * against a circuit.
+ * The AVAS synth's own level is NOT one of these: it is WM8904_AUDIO_AVAS_SHIFT (default
+ * in wm8904_audio.c, overridden below because POST moves it), because it calibrates a
+ * synthesiser against full scale rather than against a circuit.
  *
  * Must be a multiple of 5 (the table's grid is 0.5 dB) and within +-240 (+-24.0 dB);
  * app_config.h refuses anything else by name rather than snapping it silently. A run-time
@@ -131,38 +207,59 @@
  */
 
 /*
- * PRE: applied to the codec's input samples, ahead of everything. +6.0 dB ships, and THIS
- * is the stage that carries the compensation for the analog attenuation described above --
- * the thing that is too quiet is the INPUT, so the input is where it is lifted.
+ * PRE: applied to the codec's input samples, ahead of everything. 0.0 dB ships -- the
+ * identity, bit for bit (gain_db.h).
  *
- * WHY THE COMPENSATION IS HERE AND NOT ON POST (corrected 2026-08-08; it shipped on POST
- * for one commit): PRE is before the mix, so it lifts the codec input and NOTHING else. The
- * AVAS synthesiser is added after it and therefore keeps the level
- * WM8904_AUDIO_AVAS_SHIFT (14) was set to by ear -- the calibration that has passed a
- * listening test twice is untouched, and there is no re-listen owed for it. POST would have
- * lifted both by the same dB, which is a different and larger change than the one asked for.
+ * WHY THE COMPENSATION MOVED TO POST (2026-10-08, aligned with the AK Nano image): this
+ * board's WM8904 init is the AK one (-1.5 dB analog, -10.125 dB ADC digital), so the ADC
+ * clips at ~0.31 FS of the 32-bit word (-10.1 dBFS). Lifting at PRE saturates the INPUT before the AVAS
+ * mix, the mute ramp and any later DSP see it; lifting at POST keeps the chain's interior
+ * ~10 dB below full scale and clips once, at the wire. This part has no FPU and the chain
+ * is saturating int32, so "low inside, lift at the end" matters more here than on AK (which
+ * does it in float and still puts it on POST). The 24-bit ADC leaves 8 spare LSBs in the
+ * word, so carrying it 12 dB lower inside costs no SNR.
  *
- * What PRE does move, on purpose: `?tp`'s meter reads the RX buffer, which this stage does
- * not write (it scales into s_chain[]), so the meter keeps answering "is the input small"
- * rather than reporting this gain back. The AVAS gate is SW0, not a level, so it is not
- * affected either.
+ * `?tp`'s meter reads the RX buffer, which neither stage writes, so it still answers
+ * "is the input small".
  */
 #ifndef PRE_GAIN_CODEC_DB_X10
-#define PRE_GAIN_CODEC_DB_X10   60     /* +6.0 dB */
+#define PRE_GAIN_CODEC_DB_X10   0      /* +0.0 dB -- identity */
 #endif
 
 /*
  * POST: applied on the way out, after the mix -- so it scales the codec input AND the AVAS
  * synth together, which is what a master output gain means.
  *
- * 0.0 dB ships: exactly the identity, bit for bit (gain_db.h), so the output stage is a
- * no-op today and the only level change in this image is PRE's. Raising this is the knob
- * for "everything is too quiet", and note that it moves the AVAS level too -- attenuating
- * the synth back is then a change to WM8904_AUDIO_AVAS_SHIFT (sonora's separate
- * PRE_GAIN_AVAS_SYNTH_DB), not to this value. Design doc section 5 and section 10.
+ * +12.0 dB ships: the same total codec-path compensation as AK Nano (PRE 0 / POST +12),
+ * so a full-level line input reaches Q31 full scale and the scope-only PWM spans its whole
+ * duty range, exactly as on AK. Before 2026-10-08 this board shipped PRE +6 / POST 0, and
+ * ADC clip point lifted 6 dB (0.62 FS) then capped the PWM at ~19..81 % duty (measured).
+ *
+ * WM8904_AUDIO_AVAS_SHIFT below compensates POST and includes the AK Nano
+ * follow-up's relative +6 dB AVAS source increase (14 -> 13).
  */
 #ifndef POST_GAIN_CODEC_DB_X10
-#define POST_GAIN_CODEC_DB_X10  0      /* +0.0 dB -- identity */
+#define POST_GAIN_CODEC_DB_X10  120    /* +12.0 dB */
+#endif
+
+/*
+ * AVAS synth level on the wire, as a left shift of its Q15 output (wm8904_audio.c). The
+ * Original level was 14 with POST 0 dB; 12 compensated POST +12 dB. The
+ * 2026-10-14 setting 13 raises only the AVAS source by approximately 6 dB.
+ */
+/*
+ * AVAS parts mask at boot (*tb): all parts, including the Type_LB noise bank.
+ * The PWM HAL build booted with the noise off (0x07) until the bank moved onto
+ * the DSP accumulators; with it on, Type_LB measures a 622.5 us block ISR of
+ * 667 us (miss=0, dma_errors=0) and the owner confirmed SW0 responds
+ * (2026-10-14). *tb0007 turns the noise off at run time if margin is needed.
+ */
+#ifndef WM8904_AUDIO_AVAS_BOOT_PARTS
+#define WM8904_AUDIO_AVAS_BOOT_PARTS 0x0Fu
+#endif
+
+#ifndef WM8904_AUDIO_AVAS_SHIFT
+#define WM8904_AUDIO_AVAS_SHIFT 13 /* relative +6 dB AVAS source, as AK Nano */
 #endif
 
 /* ---- Console: capability first, then what this profile does with it ---- */

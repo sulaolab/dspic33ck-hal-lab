@@ -1,8 +1,15 @@
 # dsPIC33CK hardware notes
 
-These notes distinguish tested behaviour from build-only coverage for the two
-board profiles in this repository. They focus on current constraints that an
-integrator can act on.
+These notes distinguish tested behaviour from build-only coverage. The table
+below records EV88G73A and DM330030; current EV08P02A and EV97U97A profiles are
+listed in the [README](../README.md). EV97U97A evidence is recorded in the
+[board guide](ck1024_touch_can_lin_port.md). These notes focus on constraints
+that an integrator can act on.
+
+The EV88G73A results below were measured on `CK64MC105_EV88G73A`, which was
+retired as a build configuration on 2026-10-15 (last buildable:
+development archive, not this public snapshot; maintainer tag
+`ck-ev88g73a-final-20261014`). They are kept as the record for that board.
 
 ## Verification scope
 
@@ -25,13 +32,13 @@ The CK DMA engine uses 16-bit elements. The audio transport therefore carries a
 disabled, and a DMA count is the requested count, not `count - 1`.
 
 Frame count is measured in wire words. Incorrectly treating it as an audio-slot
-count produces an invalid frame geometry. The default EV88G73A path is verified
+count produces an invalid frame geometry. The EV88G73A path was verified
 for TDM8. Other format, clock-role, and board combinations require target-board
 confirmation.
 
 ## Clock and console
 
-The default EV88G73A configuration runs at `Fosc = 200 MHz` / `Fcy = 100 MHz`.
+The EV88G73A configuration ran at `Fosc = 200 MHz` / `Fcy = 100 MHz`.
 UART baud selection must follow the achieved clock. If a configuration selects a
 lower clock, the console uses a representable fallback rate rather than assuming
 230400 baud is valid.

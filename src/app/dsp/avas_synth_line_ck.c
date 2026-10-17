@@ -1147,14 +1147,17 @@ void avas_line_ck_init(avas_line_ck_t *s)
 #endif
     s->out_gain_q15 = s->set->norm_gain_q15;
     s->parts        = (uint8_t)AVAS_TYPE_TY_CK_PART_ALL;
+    /* memset above already cleared pitch_cent/_req and the two pending flags; the
+     * ratio pair has to start at unity explicitly -- 0 there would mean "silence
+     * every step", not "no trim".  It is set BEFORE reset_phase(), which evaluates
+     * every cluster once and so already advances the baseband phases by
+     * step * ratio: at ratio 0 that first advance was lost, a permanent phase
+     * offset that broke bit-exactness with the model (run_host_check.py). */
+    s->pitch_ratio_q14     = (int16_t)AVAS_PITCH_CK_RATIO_Q14_UNITY;
+    s->pitch_ratio_req_q14 = (int16_t)AVAS_PITCH_CK_RATIO_Q14_UNITY;
     avas_line_ck_reset_phase(s);
     s->gate        = 0L;
     s->gate_target = 0L;
-    /* memset above already cleared pitch_cent/_req and the two pending flags; the
-     * ratio pair has to start at unity explicitly -- 0 there would mean "silence
-     * every step", not "no trim". */
-    s->pitch_ratio_q14     = (int16_t)AVAS_PITCH_CK_RATIO_Q14_UNITY;
-    s->pitch_ratio_req_q14 = (int16_t)AVAS_PITCH_CK_RATIO_Q14_UNITY;
 #if defined(AVAS_TYPE_LB_CK_CONST_PROBE)
     avas_type_lb_ck_const_probe();
 #endif

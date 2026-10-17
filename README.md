@@ -1,7 +1,7 @@
 # dsPIC33CK HAL lab
 
 Firmware and HAL integration lab for dsPIC33CK boards. The default target is
-the **dsPIC33CK64MC105 EV88G73A Curiosity Nano** with a WM8904 mikroBUS codec
+the **dsPIC33CK256MC005 EV08P02A Curiosity Nano** with a WM8904 mikroBUS codec
 board. The repository contains the application used to exercise the CK HALs,
 the board profiles, and build helpers for the supported configurations.
 
@@ -9,16 +9,22 @@ the board profiles, and build helpers for the supported configurations.
 
 | Configuration | Board / MCU | Status |
 | --- | --- | --- |
-| `CK64MC105_EV88G73A` | EV88G73A Curiosity Nano / dsPIC33CK64MC105 | Default configuration; hardware-verified for UART, I2C, TDM8 audio, AVAS, and traps. |
+| `CK256MC005_EV08P02A` | EV08P02A Curiosity Nano / dsPIC33CK256MC005 | Default configuration; WM8904 TDM audio and AVAS. Program with `flash-mdb-nano.ps1` (the kit has no drag-and-drop). |
 | `CK256MP508_DM330030` | DM330030 Curiosity / dsPIC33CK256MP508 | Build coverage only. Hardware behaviour has not been verified on this board. |
+| `CK1024MP710_EV97U97A` | EV97U97A Touch-CAN-LIN Curiosity / dsPIC33CK1024MP710 | WM8904 on mikroBUS A; AVAS sound and POT pitch confirmed on 2026-10-13. [Operation and pre-flash mute](docs/ck1024_touch_can_lin_port.md). |
 
-The two profiles have different devices, linker scripts, pin routing,
+`CK64MC105_EV88G73A` (EV88G73A Curiosity Nano / dsPIC33CK64MC105) was retired
+on 2026-10-15; its last buildable tree is retained in the development archive,
+not in this public snapshot. The maintainer tag is `ck-ev88g73a-final-20261014`.
+Its board source under `src/boards/ev88g73a/` is kept.
+
+The profiles have different devices, linker scripts, pin routing,
 configuration bits, and programming paths. A successful build for one profile
-does not validate the other.
+does not validate another.
 
 ## Hardware
 
-The verified EV88G73A setup uses a Curiosity Nano with the WM8904 mikroBUS
+The Curiosity Nano setup uses the WM8904 mikroBUS
 codec board. The codec board design is available separately at
 [sulaolab/EasyEDA-WM8904-mikroBUS](https://github.com/sulaolab/EasyEDA-WM8904-mikroBUS).
 
@@ -59,8 +65,9 @@ three J2 jumpers above are fitted.
 
 - MPLAB X v6.30
 - XC-DSC v3.31.01
-- dsPIC33CK-MC_DFP 1.10.386 for `CK64MC105_EV88G73A`
+- dsPIC33CK-MC_DFP 1.11.412 for `CK256MC005_EV08P02A`
 - dsPIC33CK-MP_DFP 1.15.423 for `CK256MP508_DM330030`
+- dsPIC33CK-MP_DFP 1.16.521 for `CK1024MP710_EV97U97A`
 
 The source project is `firmware.X`; application and HAL source is under `src`.
 
@@ -69,11 +76,11 @@ The source project is `firmware.X`; application and HAL source is under `src`.
 From the repository root:
 
 ```powershell
-# Default EV88G73A build
+# Default EV08P02A build
 .\buildtools\build.ps1
 
 # Explicit clean build
-.\buildtools\build.ps1 -Full -Configuration CK64MC105_EV88G73A
+.\buildtools\build.ps1 -Full -Configuration CK256MC005_EV08P02A
 
 # Build-only DM330030 configuration
 .\buildtools\build.ps1 -Full -Configuration CK256MP508_DM330030
@@ -84,7 +91,7 @@ audio-safety guidance.
 
 ## Audio controls
 
-The default EV88G73A ROM image supports these audio commands:
+The default EV08P02A ROM image supports these audio commands:
 
 | Command | Effect |
 | --- | --- |

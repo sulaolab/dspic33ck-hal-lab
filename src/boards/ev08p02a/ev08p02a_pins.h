@@ -46,6 +46,13 @@
  * pull-up is load-bearing (DS70005656A Sec.4.2.2, "Mechanical Switch"). */
 #define EV08P02A_SW0_PIN      NORA_GPIO_PIN(NORA_GPIO_PORT_D, 13u)
 
+/* MPQ6612A on mikroBUS socket 3; PG4H/L are PPS outputs. Socket 1 RST
+ * carries Rev4/Rev5 XTAL_OUT and requires one jumper to RB0/OSCI. */
+#define EV08P02A_PWM_IN1_RP ((nora_gpio_rp_t)39u) /* RB7, PWM */
+#define EV08P02A_PWM_IN2_RP ((nora_gpio_rp_t)47u) /* RB15, CS */
+#define EV08P02A_PWM_SLEEP_PIN NORA_GPIO_PIN(NORA_GPIO_PORT_B, 13u) /* RST */
+#define EV08P02A_PWM_FAULT_PIN NORA_GPIO_PIN(NORA_GPIO_PORT_B, 12u) /* INT */
+
 /* ---- Console UART1, through the Nano's on-board debugger CDC ---- */
 #define EV08P02A_UART1_TX_RP  ((nora_gpio_rp_t)58u) /* RC10 */
 #define EV08P02A_UART1_RX_RP  ((nora_gpio_rp_t)59u) /* RC11 */
@@ -79,6 +86,10 @@
  */
 #ifndef EV08P02A_POT_SOCKET
 #define EV08P02A_POT_SOCKET 2
+#endif
+
+#if EV08P02A_PWM_AUDIO && (EV08P02A_POT_SOCKET == 3)
+#error "POT socket 3 conflicts with MPQ6612A VISEN; use socket 2"
 #endif
 
 #if (EV08P02A_POT_SOCKET == 1)

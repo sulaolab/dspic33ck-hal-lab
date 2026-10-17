@@ -64,6 +64,19 @@ extern "C" {
 void uart_platform_stdio_init(uint32_t baudrate);
 
 /*
+ * The same bring-up, with the TX interrupt priority the HAL's async TX engine
+ * (nora_uart_tx_start) needs. uart_platform_stdio_init() is this with 0, i.e. no TX
+ * interrupt, which is what every polled console wants. EV08P02A passes non-zero: its
+ * console_out drains a RAM ring from the TX interrupt, because the CPU spinning on
+ * UTXBF during a report put an audible ~2 s "zat" on the PWM audio output
+ * (2026-10-14/15 bench, see ev08p02a_console_out.c).
+ *
+ * The write() hook below stays blocking either way; do not use printf on a console
+ * that also runs async TX (the HAL forbids mixing the two on one instance).
+ */
+void uart_platform_stdio_init_tx_irq(uint32_t baudrate, uint8_t tx_irq_priority);
+
+/*
  * Result of the peripheral-init stage above. Readable from a debugger for the
  * case that matters: the console itself failing to come up, when no printf can
  * report it.

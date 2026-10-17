@@ -55,8 +55,8 @@ param(
     [switch]$DryRun,
     [switch]$Verbose,
     [switch]$Quiet,
-    [ValidateSet('CK64MC105_EV88G73A', 'CK256MC005_EV08P02A')]
-    [string]$Configuration = 'CK64MC105_EV88G73A',
+    [ValidateSet('CK256MC005_EV08P02A')]
+    [string]$Configuration = 'CK256MC005_EV08P02A',
     [string]$Root = (Get-Location).Path,
     [string]$ProjectDir,
     [string]$Hex,
@@ -83,7 +83,7 @@ param(
       serial_monitor to wait for this substring on the board's console. Turns a
       guess into a real confirmation.
 
-      Left empty for an EV88G73A build, this now DEFAULTS to the build ID that
+      Left empty, this DEFAULTS to the build ID that
       build.ps1 stamped, read from the generated header beside the object files.
       That is deliberate rather than convenient. STATUS.TXT is documented by the
       kit itself as OS-cached, so on a run where the volume does not visibly drop
@@ -109,7 +109,9 @@ param(
     [int]$MuteTimeoutSec = 5,
     [int]$MuteSettleMs = 1500,
     [switch]$RequireVerifiedMute,
-    [string]$MonitorUrl = 'http://127.0.0.5:8080',
+    [string]$MonitorUrl,
+    [string]$MonitorRoot,
+    [string]$MonitorProfile = 'ck-nano',
     [int]$UartTimeoutSec = 20
 )
 
@@ -672,6 +674,7 @@ function Wait-ProgrammingStatus {
 # the mdb programmer-mode path (the only path that works on EV08P02A) runs the
 # SAME mute gate rather than a second copy of it. Edit them there.
 . (Join-Path $PSScriptRoot 'nano-console-gate.ps1')
+. (Join-Path $PSScriptRoot 'serial-monitor-resolver.ps1')
 
 
 function Invoke-DragAndDropCopy {
@@ -715,16 +718,13 @@ if ($List) {
     return
 }
 
-# Per-board defaults, keyed by -Configuration. EV08P02A (dsPIC33CK256MC005) is
-# EV88G73A's port to a newer Nano kit and shares this whole script; only these
-# two names differ.
+# Per-board defaults, keyed by -Configuration; only these two names differ
+# between Nano boards.
 $nanoBoardPrefix = switch ($Configuration) {
-    'CK64MC105_EV88G73A'  { 'EV88G73A' }
     'CK256MC005_EV08P02A' { 'EV08P02A' }
     default               { $null }
 }
 $nanoBoardDevice = switch ($Configuration) {
-    'CK64MC105_EV88G73A'  { 'dsPIC33CK64MC105' }
     'CK256MC005_EV08P02A' { 'dsPIC33CK256MC005' }
     default               { $null }
 }
@@ -738,6 +738,16 @@ if ([string]::IsNullOrWhiteSpace($ExpectedDevice)) {
 $repoRoot = Resolve-BuildRoot -RequestedRoot $Root
 $projectDir = Resolve-MplabProjectDir -Root $repoRoot -RequestedProjectDir $ProjectDir
 $hexPath = Resolve-ProductionHex -RequestedHex $Hex -ProjectDir $projectDir -Configuration $Configuration
+
+$monitorResolveError = $null
+try {
+    $MonitorUrl = Resolve-RunningSerialMonitorUrl -RequestedUrl $MonitorUrl `
+        -ExpectedProfile $MonitorProfile -RepoRoot $repoRoot -MonitorRoot $MonitorRoot
+} catch {
+    $monitorResolveError = $_.Exception.Message
+    if ($RequireVerifiedMute) { throw }
+    Write-Status "WARNING: serial-monitor endpoint not resolved -- mute/UART checks cannot run ($monitorResolveError)"
+}
 
 if ([string]::IsNullOrWhiteSpace($ProgramFileName)) {
     # The CURIOSITY volume is an emulator, not an ordinary disk. On this kit a
@@ -795,11 +805,14 @@ $deviceInfo = Assert-ExpectedDevice -DriveLetter $driveLetter -ExpectedDevice $E
 if ($StopAudioCommand -eq 'none') {
     Write-Status 'WARNING: stop-audio mute explicitly disabled (-StopAudioCommand none)'
 } elseif (-not [string]::IsNullOrWhiteSpace($StopAudioCommand)) {
-    if ($DryRun) {
+    if ([string]::IsNullOrWhiteSpace($MonitorUrl)) {
+        Write-Status "WARNING: mute NOT verified -- programming anyway: $monitorResolveError"
+    } elseif ($DryRun) {
         Write-Status "Dry-run: would attempt a '$StopAudioCommand' mute via $MonitorUrl before copying (bounded, non-blocking)"
     } else {
         Invoke-BestEffortAudioStop -MonitorUrl $MonitorUrl -Command $StopAudioCommand `
             -ExpectedKitSerial $deviceInfo.SerialNumber `
+            -ExpectedProfile $MonitorProfile `
             -TimeoutSec $MuteTimeoutSec -SettleMs $MuteSettleMs `
             -RequireVerified:$RequireVerifiedMute | Out-Null
     }
@@ -829,7 +842,7 @@ try {
 # Anything after this point was produced by the firmware we are about to write.
 $uartLogMark = $null
 if (-not [string]::IsNullOrWhiteSpace($VerifyUartContains)) {
-    $uartLogMark = Get-UartLogMark -MonitorUrl $MonitorUrl
+    $uartLogMark = if ([string]::IsNullOrWhiteSpace($MonitorUrl)) { $null } else { Get-UartLogMark -MonitorUrl $MonitorUrl }
     if ($null -eq $uartLogMark) {
         Write-Status "serial_monitor not reachable at $MonitorUrl -- UART verification will report that."
     } else {
@@ -894,7 +907,11 @@ Write-Host "Elapsed: $($result.ElapsedSec)s"
 #>
 if (-not [string]::IsNullOrWhiteSpace($VerifyUartContains)) {
     # Confirm the console we are about to trust belongs to the board we flashed.
-    $monKit = Resolve-MonitorKitSerial -MonitorUrl $MonitorUrl
+    $monKit = if ([string]::IsNullOrWhiteSpace($MonitorUrl)) {
+        [pscustomobject]@{ Ok = $false; Detail = $monitorResolveError; Serial = $null; Port = $null }
+    } else {
+        Resolve-MonitorKitSerial -MonitorUrl $MonitorUrl
+    }
     $wrongBoard = $false
     if ($monKit.Ok) {
         if ($monKit.Serial -eq $deviceInfo.SerialNumber) {

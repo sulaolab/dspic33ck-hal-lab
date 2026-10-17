@@ -10,21 +10,24 @@ param(
     [string]$Device,
     [string]$ResetDevice,
     [string]$Hex,
-    [ValidateSet('CK256MP508_DM330030', 'CK64MC105_EV88G73A')]
+    [ValidateSet('CK256MP508_DM330030', 'CK1024MP710_EV97U97A')]
     [string]$Configuration = 'CK256MP508_DM330030',
     [string]$Root = (Get-Location).Path,
     [string]$ProjectDir,
     [string]$ToolsDir = $env:FLASH_RESET_TOOLS,
-    [int]$ResetTimeoutSec = 120
+    [int]$ResetTimeoutSec = 120,
+    # EV97U97A: strict readback-verified mute before flash OR reset. URL is resolved.
+    [ValidateSet('*ts', 'none')][string]$StopAudioCommand = '*ts',
+    [string]$MonitorUrl,
+    [string]$MonitorRoot,
+    [ValidateRange(1, 60)][int]$MuteTimeoutSec = 10,
+    [ValidateRange(0, 10000)][int]$MuteSettleMs = 1500
 )
 
 $ErrorActionPreference = 'Stop'
 
-if ($Configuration -eq 'CK64MC105_EV88G73A') {
-    throw 'EV88G73A flashing is intentionally disabled: confirm its debugger, ICSP wiring, configuration bits, and board smoke image before enabling a write path.'
-}
 if ([string]::IsNullOrWhiteSpace($Device)) {
-    $Device = 'dsPIC33CK256MP508'
+    $Device = if ($Configuration -eq 'CK1024MP710_EV97U97A') { 'dsPIC33CK1024MP710' } else { 'dsPIC33CK256MP508' }
 }
 if ($Verbose -and $Quiet) {
     throw "Use either -Verbose or -Quiet, not both."
@@ -228,6 +231,12 @@ function Invoke-ResetJavaCleanup {
 
 $repoRoot = Resolve-BuildRoot -RequestedRoot $Root
 $projectDir = Resolve-MplabProjectDir -Root $repoRoot -RequestedProjectDir $ProjectDir
+if ($Configuration -eq 'CK1024MP710_EV97U97A' -and $Device -ne 'dsPIC33CK1024MP710') {
+    throw 'CK1024MP710_EV97U97A requires Device dsPIC33CK1024MP710.'
+}
+if ($Configuration -eq 'CK1024MP710_EV97U97A' -and -not $List -and [string]::IsNullOrWhiteSpace($Serial)) {
+    throw 'EV97U97A requires an explicit -Serial. Use identify-pkob4.ps1 to map USB serial to COM and confirm the target.'
+}
 $toolsDir = Resolve-FlashResetToolsDir -RequestedToolsDir $ToolsDir -Root $repoRoot
 $flashTool = Join-Path $toolsDir 'flash_pkob4.exe'
 $resetTool = Join-Path $toolsDir 'reset_pkob4.exe'
@@ -258,12 +267,28 @@ $resetDeviceToken = if ([string]::IsNullOrWhiteSpace($ResetDevice)) {
     $ResetDevice
 }
 
+function Stop-Ev97AudioBeforeWrite {
+    if ($Configuration -ne 'CK1024MP710_EV97U97A') { return }
+    if ($StopAudioCommand -eq 'none') {
+        Write-Host 'External mute override: *ts verification skipped. Disconnect/mute the analog output before proceeding.'
+        return
+    }
+    . (Join-Path $PSScriptRoot 'pkob-audio-gate.ps1')
+    $resolvedMonitorUrl = Resolve-PkobMonitorUrl -Root $repoRoot -MonitorRoot $MonitorRoot -MonitorUrl $MonitorUrl
+    if ($DryRun) {
+        Write-Host "Dry-run: would verify monitor/PKoB4 identity, send *ts through $resolvedMonitorUrl, confirm analog mute and settle ${MuteSettleMs}ms. No UART command sent."
+        return
+    }
+    Invoke-PkobVerifiedAudioStop -MonitorUrl $resolvedMonitorUrl -Serial $serialNumber -TimeoutSec $MuteTimeoutSec -SettleMs $MuteSettleMs
+}
+
 Write-Status "Root: $repoRoot"
 Write-Status "Project: $projectDir"
 Write-Status "Tools: $toolsDir"
 Write-Status "Serial: $serialNumber"
 
 if ($Reset) {
+    Stop-Ev97AudioBeforeWrite
     $resetArgs = @('--serial', $serialNumber, '--device', $resetDeviceToken, '--timeout', $ResetTimeoutSec)
     if (-not $Quiet) { $resetArgs += '--verbose' }
     if ($DryRun) { $resetArgs += '--dry-run' }
@@ -291,6 +316,7 @@ $flashArgs = @(
 if (-not $Quiet) { $flashArgs += '--verbose' }
 if ($DryRun) { $flashArgs += '--dry-run' }
 
+Stop-Ev97AudioBeforeWrite
 Invoke-CheckedExe -Exe $flashTool -Arguments $flashArgs
 
 $resetArgs = @('--serial', $serialNumber, '--device', $resetDeviceToken, '--timeout', $ResetTimeoutSec)

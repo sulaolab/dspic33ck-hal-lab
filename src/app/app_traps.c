@@ -123,6 +123,10 @@ static void app_trap_record_and_apply_policy(app_trap_id_t id)
 
 void __attribute__((__interrupt__, no_auto_psv)) _OscillatorFail(void)
 {
+#if defined(DSPIC33CK_BOARD_EV08P02A) && defined(EV08P02A_PWM_AUDIO) && EV08P02A_PWM_AUDIO
+    /* On the ECPLL MPQ image, withdraw bridge drive before trap policy resets. */
+    LATBbits.LATB13 = 0u;
+#endif
     INTCON1bits.OSCFAIL = 0;
     app_trap_record_and_apply_policy(APP_TRAP_OSC_FAIL);
 }

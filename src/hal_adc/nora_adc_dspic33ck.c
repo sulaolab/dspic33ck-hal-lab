@@ -210,6 +210,29 @@ bool nora_adc_init(nora_adc_handle_t *handle, const nora_adc_config_t *config)
     ADCON2L = DSPIC33CK_ADC_ADCON2L_TADCORE_DIV6;
     ADCON2H = shared_samc & DSPIC33CK_ADC_ADCON2H_SAMC_MASK;
     ADCON3L = 0u;
+#if defined(__dsPIC33CK1024MP710__)
+    /* DS70005496D ADC: AN0 is dedicated core 0, not the shared core.
+     * CLKSEL=0 (Fcy), ADCS=3 (/6), 12-bit unsigned; SAMC delay enabled.
+     * Power -> ADON -> ready -> digital enable. No ADC interrupt ownership. */
+    ADCON3H = 0u;
+    ADCON4Hbits.C0CHS = 0u;
+    ADMOD0Lbits.SIGN0 = 0u;
+    ADMOD0Lbits.DIFF0 = 0u;
+    ADCORE0Lbits.SAMC = shared_samc;
+    ADCORE0H = 0u;
+    ADCORE0Hbits.ADCS = 3u;
+    ADCORE0Hbits.RES = 3u;
+    ADCON4Lbits.SAMC0EN = 1u;
+    ADTRIG0Lbits.TRGSRC0 = 0u; /* Individual CNVRTCH trigger. */
+    ADCON5L = _ADCON5L_C0PWR_MASK;
+    ADCON5H = DSPIC33CK_ADC_ADCON5H_SHARED_WARMUP;
+    ADCON1L |= DSPIC33CK_ADC_ADCON1L_ADON;
+    if (!adc_wait_for_bit(&ADCON5L, _ADCON5L_C0RDY_MASK, ready_timeout)) {
+        adc_enter_timeout_fault(handle);
+        return false;
+    }
+    ADCON3Hbits.C0EN = 1u;
+#else
     ADCON3H = DSPIC33CK_ADC_ADCON3H_SHARED_CORE;
     ADCON5L = DSPIC33CK_ADC_ADCON5L_SHRPWR;
     ADCON5H = DSPIC33CK_ADC_ADCON5H_SHARED_WARMUP;
@@ -219,6 +242,8 @@ bool nora_adc_init(nora_adc_handle_t *handle, const nora_adc_config_t *config)
         adc_enter_timeout_fault(handle);
         return false;
     }
+
+#endif
 
     handle->initialized = true;
     handle->last_result = NORA_ADC_RESULT_OK;

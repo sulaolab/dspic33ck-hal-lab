@@ -97,7 +97,10 @@ static inline uint8_t dspic33ck_adc_reg_oversampling_fractional_bits(uint8_t rat
 
 static inline bool dspic33ck_adc_reg_channel_is_valid(uint8_t channel)
 {
-#if defined(__dsPIC33CK256MP508__)
+#if defined(__dsPIC33CK1024MP710__)
+    /* Initial MP710 port: dedicated core 0 / board POT AN0 only. */
+    return channel == 0u;
+#elif defined(__dsPIC33CK256MP508__)
     /* AN0/AN1 are dedicated-core inputs; AN24/AN25 are internal sources. */
     return (channel >= 2u) && (channel <= 23u);
 #elif defined(__dsPIC33CK64MC105__)

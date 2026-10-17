@@ -17,14 +17,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* Physical remappable RP range on this classic-PPS device: ports B/C/D only. */
-#define NORA_PPS_RP_MIN  32u
-#define NORA_PPS_RP_MAX  79u
-
-/* Virtual RP range (RPV0..RPV5). Padless; see the header. */
-#define NORA_PPS_RPV_MIN 176u
-#define NORA_PPS_RPV_MAX 181u
-
 
 //===========================================================
 // PPS lock gate (RPCON.IOLOCK)
@@ -253,7 +245,7 @@ static bool nora_pps_get_output_code(nora_pps_output_t output, uint8_t *code)
 // Local: write the output function code onto an RP pin's _RPnnR
 //===========================================================
 // _RPnnR is a bit-field alias (assignment only; no address / no formula). Every
-// physical remappable RP on this device (RP32..RP79, ports B/C/D) is listed,
+// physical remappable RP on this device (RP32..RP99, with availability from the DFP) is listed,
 // each #ifdef-guarded so only the device's real registers compile. Ports A/E
 // have no RPn; the RPV virtual outputs are excluded (this API is typed for
 // physical GPIO RPs, matching the AK sibling). Flat switch by design -- a switch
@@ -406,6 +398,66 @@ static bool nora_pps_write_output_rp(nora_gpio_rp_t rp, uint8_t code)
 #ifdef _RP79R
     case 79u: _RP79R = code; return true;
 #endif
+#ifdef _RP80R
+    case 80u: _RP80R = code; return true;
+#endif
+#ifdef _RP81R
+    case 81u: _RP81R = code; return true;
+#endif
+#ifdef _RP82R
+    case 82u: _RP82R = code; return true;
+#endif
+#ifdef _RP83R
+    case 83u: _RP83R = code; return true;
+#endif
+#ifdef _RP84R
+    case 84u: _RP84R = code; return true;
+#endif
+#ifdef _RP85R
+    case 85u: _RP85R = code; return true;
+#endif
+#ifdef _RP86R
+    case 86u: _RP86R = code; return true;
+#endif
+#ifdef _RP87R
+    case 87u: _RP87R = code; return true;
+#endif
+#ifdef _RP88R
+    case 88u: _RP88R = code; return true;
+#endif
+#ifdef _RP89R
+    case 89u: _RP89R = code; return true;
+#endif
+#ifdef _RP90R
+    case 90u: _RP90R = code; return true;
+#endif
+#ifdef _RP91R
+    case 91u: _RP91R = code; return true;
+#endif
+#ifdef _RP92R
+    case 92u: _RP92R = code; return true;
+#endif
+#ifdef _RP93R
+    case 93u: _RP93R = code; return true;
+#endif
+#ifdef _RP94R
+    case 94u: _RP94R = code; return true;
+#endif
+#ifdef _RP95R
+    case 95u: _RP95R = code; return true;
+#endif
+#ifdef _RP96R
+    case 96u: _RP96R = code; return true;
+#endif
+#ifdef _RP97R
+    case 97u: _RP97R = code; return true;
+#endif
+#ifdef _RP98R
+    case 98u: _RP98R = code; return true;
+#endif
+#ifdef _RP99R
+    case 99u: _RP99R = code; return true;
+#endif
     /* Virtual pins RPV0..RPV5 (RP176..RP181): padless on-chip routing endpoints.
      * Same _RPnnR aliases, same 6-bit code, so they belong in the same switch --
      * the only difference is that no GPIO configuration precedes them. */
@@ -451,7 +503,9 @@ static bool nora_pps_write_output_rp(nora_gpio_rp_t rp, uint8_t code)
 //
 // Physical pins only: the reverse lookup answers "which pad", and including RPV0..5
 // would let it report a padless pin as the answer.
-#define NORA_PPS_RPOR_FIELD_MASK   (0x3Fu)   /* RPnR is a 6-bit output-select */
+/* MP710 output-select fields are 7-bit; earlier devices use 6-bit.
+ * RP32 occupies the low field on all supported CK devices. */
+#define NORA_PPS_RPOR_FIELD_MASK   (_RPOR0_RP32R_MASK)
 #define NORA_PPS_RPOR_FIELDS_PER   (2u)      /* two RPnR fields per 16-bit RPORx */
 
 /*
@@ -464,7 +518,7 @@ static bool nora_pps_write_output_rp(nora_gpio_rp_t rp, uint8_t code)
 typedef struct
 {
     uint8_t rp;     /* the RP number                      */
-    uint8_t slot;   /* index of its 6-bit field in the bank */
+    uint8_t slot;   /* index of its output-select field in the bank */
 } nora_pps_rpor_entry_t;
 
 static const nora_pps_rpor_entry_t s_pps_rpor[] = {
@@ -559,9 +613,8 @@ static const nora_pps_rpor_entry_t s_pps_rpor[] = {
 #ifdef _RP61R
     NORA_PPS_RPOR_ENTRY(61u, 29u)
 #endif
-    /* From here the two supported parts diverge: MP508 continues contiguously with
-     * RP62.., while MC105 has no RP62..64 and resumes at RP65 in the NEXT slot. Each
-     * entry states its own slot, so both descriptions are just data. */
+    /* MC105 packs its remaining pins after RP61; MC005 keeps sparse RPOR
+     * banks. Probe the actual DFP field location, not neighboring-pin presence. */
 #ifdef _RP62R
     NORA_PPS_RPOR_ENTRY(62u, 30u)
 #endif
@@ -571,10 +624,10 @@ static const nora_pps_rpor_entry_t s_pps_rpor[] = {
 #ifdef _RP64R
     NORA_PPS_RPOR_ENTRY(64u, 32u)
 #endif
-#if defined(_RP65R) && defined(_RP64R)
-    NORA_PPS_RPOR_ENTRY(65u, 33u)   /* MP508: contiguous after RP64 */
+#if defined(_RPOR16_RP65R_POSITION)
+    NORA_PPS_RPOR_ENTRY(65u, (2u * 16u + _RPOR16_RP65R_POSITION / 8u))
 #elif defined(_RP65R)
-    NORA_PPS_RPOR_ENTRY(65u, 30u)   /* MC105: RPOR15 low field      */
+    NORA_PPS_RPOR_ENTRY(65u, 30u)   /* MC105 packed bank */
 #endif
 #ifdef _RP66R
     NORA_PPS_RPOR_ENTRY(66u, 34u)
@@ -594,18 +647,18 @@ static const nora_pps_rpor_entry_t s_pps_rpor[] = {
 #ifdef _RP71R
     NORA_PPS_RPOR_ENTRY(71u, 39u)
 #endif
-#if defined(_RP72R) && defined(_RP71R)
-    NORA_PPS_RPOR_ENTRY(72u, 40u)   /* MP508: contiguous            */
+#if defined(_RPOR20_RP72R_POSITION)
+    NORA_PPS_RPOR_ENTRY(72u, (2u * 20u + _RPOR20_RP72R_POSITION / 8u))
 #elif defined(_RP72R)
-    NORA_PPS_RPOR_ENTRY(72u, 31u)   /* MC105: RPOR15 high field     */
+    NORA_PPS_RPOR_ENTRY(72u, 31u)   /* MC105 packed bank */
 #endif
 #ifdef _RP73R
     NORA_PPS_RPOR_ENTRY(73u, 41u)
 #endif
-#if defined(_RP74R) && defined(_RP73R)
-    NORA_PPS_RPOR_ENTRY(74u, 42u)   /* MP508: contiguous            */
+#if defined(_RPOR21_RP74R_POSITION)
+    NORA_PPS_RPOR_ENTRY(74u, (2u * 21u + _RPOR21_RP74R_POSITION / 8u))
 #elif defined(_RP74R)
-    NORA_PPS_RPOR_ENTRY(74u, 32u)   /* MC105: RPOR16 low field      */
+    NORA_PPS_RPOR_ENTRY(74u, 32u)   /* MC105 packed bank */
 #endif
 #ifdef _RP75R
     NORA_PPS_RPOR_ENTRY(75u, 43u)
@@ -613,10 +666,10 @@ static const nora_pps_rpor_entry_t s_pps_rpor[] = {
 #ifdef _RP76R
     NORA_PPS_RPOR_ENTRY(76u, 44u)
 #endif
-#if defined(_RP77R) && defined(_RP76R)
-    NORA_PPS_RPOR_ENTRY(77u, 45u)   /* MP508: contiguous            */
+#if defined(_RPOR22_RP77R_POSITION)
+    NORA_PPS_RPOR_ENTRY(77u, (2u * 22u + _RPOR22_RP77R_POSITION / 8u))
 #elif defined(_RP77R)
-    NORA_PPS_RPOR_ENTRY(77u, 33u)   /* MC105: RPOR16 high field     */
+    NORA_PPS_RPOR_ENTRY(77u, 33u)   /* MC105 packed bank */
 #endif
 #ifdef _RP78R
     NORA_PPS_RPOR_ENTRY(78u, 46u)
@@ -624,13 +677,73 @@ static const nora_pps_rpor_entry_t s_pps_rpor[] = {
 #ifdef _RP79R
     NORA_PPS_RPOR_ENTRY(79u, 47u)
 #endif
+#ifdef _RP80R
+    NORA_PPS_RPOR_ENTRY(80u, 48u)
+#endif
+#ifdef _RP81R
+    NORA_PPS_RPOR_ENTRY(81u, 49u)
+#endif
+#ifdef _RP82R
+    NORA_PPS_RPOR_ENTRY(82u, 50u)
+#endif
+#ifdef _RP83R
+    NORA_PPS_RPOR_ENTRY(83u, 51u)
+#endif
+#ifdef _RP84R
+    NORA_PPS_RPOR_ENTRY(84u, 52u)
+#endif
+#ifdef _RP85R
+    NORA_PPS_RPOR_ENTRY(85u, 53u)
+#endif
+#ifdef _RP86R
+    NORA_PPS_RPOR_ENTRY(86u, 54u)
+#endif
+#ifdef _RP87R
+    NORA_PPS_RPOR_ENTRY(87u, 55u)
+#endif
+#ifdef _RP88R
+    NORA_PPS_RPOR_ENTRY(88u, 56u)
+#endif
+#ifdef _RP89R
+    NORA_PPS_RPOR_ENTRY(89u, 57u)
+#endif
+#ifdef _RP90R
+    NORA_PPS_RPOR_ENTRY(90u, 58u)
+#endif
+#ifdef _RP91R
+    NORA_PPS_RPOR_ENTRY(91u, 59u)
+#endif
+#ifdef _RP92R
+    NORA_PPS_RPOR_ENTRY(92u, 60u)
+#endif
+#ifdef _RP93R
+    NORA_PPS_RPOR_ENTRY(93u, 61u)
+#endif
+#ifdef _RP94R
+    NORA_PPS_RPOR_ENTRY(94u, 62u)
+#endif
+#ifdef _RP95R
+    NORA_PPS_RPOR_ENTRY(95u, 63u)
+#endif
+#ifdef _RP96R
+    NORA_PPS_RPOR_ENTRY(96u, 64u)
+#endif
+#ifdef _RP97R
+    NORA_PPS_RPOR_ENTRY(97u, 65u)
+#endif
+#ifdef _RP98R
+    NORA_PPS_RPOR_ENTRY(98u, 66u)
+#endif
+#ifdef _RP99R
+    NORA_PPS_RPOR_ENTRY(99u, 67u)
+#endif
 #undef NORA_PPS_RPOR_ENTRY
 };
 
 #define NORA_PPS_RPOR_COUNT \
     (sizeof(s_pps_rpor) / sizeof(s_pps_rpor[0]))
 
-/* Slot i lives in (&RPOR0)[i / 2], field (i odd) ? [13:8] : [5:0]. Affine in the
+/* Slot i lives in (&RPOR0)[i / 2], at bit 8 (odd) or 0 (even). Affine in the
  * SLOT, which is exactly what the table above supplies. */
 static uint8_t nora_pps_read_slot(uint8_t slot)
 {
@@ -699,6 +812,50 @@ bool nora_pps_find_output_rp(nora_pps_output_t output, nora_gpio_rp_t *rp)
 }
 
 
+//===========================================================
+// Local: does this RP number exist on the selected device?
+//===========================================================
+// Bring-up only -- a linear sweep of the table is not a hot path.
+static bool nora_pps_rp_exists(nora_gpio_rp_t rp)
+{
+    uint32_t i;
+
+    for (i = 0u; i < (uint32_t)NORA_PPS_RPOR_COUNT; ++i)
+    {
+        if (s_pps_rpor[i].rp == (uint8_t)rp)
+        {
+            return true;
+        }
+    }
+
+    switch (rp)
+    {
+#ifdef _RP176R
+    case NORA_PPS_RPV0: return true;
+#endif
+#ifdef _RP177R
+    case NORA_PPS_RPV1: return true;
+#endif
+#ifdef _RP178R
+    case NORA_PPS_RPV2: return true;
+#endif
+#ifdef _RP179R
+    case NORA_PPS_RPV3: return true;
+#endif
+#ifdef _RP180R
+    case NORA_PPS_RPV4: return true;
+#endif
+#ifdef _RP181R
+    case NORA_PPS_RPV5: return true;
+#endif
+    default:
+        break;
+    }
+
+    return false;
+}
+
+
 bool nora_pps_route_input(nora_pps_input_t input, nora_gpio_rp_t rp)
 {
     bool ok = true;
@@ -706,10 +863,11 @@ bool nora_pps_route_input(nora_pps_input_t input, nora_gpio_rp_t rp)
     /* Reject any RP that is neither a physical remappable pin nor a virtual one
      * before writing. RPINRx input-selects take the RP NUMBER, and the virtual
      * numbers are legal values there (that is how a padless output reaches another
-     * peripheral's input) -- so the range check admits both bands and nothing
-     * between or beyond them. */
-    if (((rp < NORA_PPS_RP_MIN)  || (rp > NORA_PPS_RP_MAX)) &&
-        ((rp < NORA_PPS_RPV_MIN) || (rp > NORA_PPS_RPV_MAX)))
+     * peripheral's input). A range test is NOT enough: the RP span is the
+     * encoding's, not the device's pin set (CK64MC105 has no RP62..RP64), so the
+     * physical answer comes from s_pps_rpor[] -- built from the same per-RP #ifdef
+     * list as the write switch -- and the virtual band from the _RPnnR aliases. */
+    if (!nora_pps_rp_exists(rp))
     {
         return false;
     }

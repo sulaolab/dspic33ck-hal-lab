@@ -8,13 +8,17 @@ board wiring remain in the board and application layers.
 
 | Configuration | MCU | Board | Status |
 | --- | --- | --- | --- |
-| `CK64MC105_EV88G73A` | dsPIC33CK64MC105 | EV88G73A Curiosity Nano | Default profile; hardware-verified for UART, I2C, TDM8/WM8904 audio, AVAS, and traps. |
+| `CK256MC005_EV08P02A` | dsPIC33CK256MC005 | EV08P02A Curiosity Nano | Default profile; WM8904 TDM audio and AVAS. |
 | `CK256MP508_DM330030` | dsPIC33CK256MP508 | DM330030 Curiosity | Build-verified only; do not treat audio or peripheral behaviour as hardware-verified. |
 
-Build either configuration with:
+`CK64MC105_EV88G73A` was retired on 2026-10-15; the last tree in which it
+builds is retained in the development archive, not this public snapshot
+(maintainer tag `ck-ev88g73a-final-20261014`).
+
+Build a configuration with:
 
 ```powershell
-pwsh buildtools/build.ps1 -Configuration CK64MC105_EV88G73A
+pwsh buildtools/build.ps1 -Configuration CK256MC005_EV08P02A
 pwsh buildtools/build.ps1 -Configuration CK256MP508_DM330030
 ```
 
@@ -31,7 +35,7 @@ through `OSCCON.OSWEN` and is complete only after the requested state and
 - `Fosc = Fvco / (POST1DIV * POST2DIV)`
 - `Fcy = Fosc / 2`
 
-The default EV88G73A operating point is `Fosc = 200 MHz` and `Fcy = 100 MHz`.
+The default EV08P02A operating point is `Fosc = 200 MHz` and `Fcy = 100 MHz`.
 Timer1 is intentionally clocked from the fixed FRC, not from `Fcy`; code that
 needs a peripheral clock must use the HAL-reported operating point rather than
 assuming a board frequency.
@@ -68,14 +72,23 @@ depending on it; the verified audio-board path uses 400 kHz.
 
 ## GPIO and PPS
 
-The public GPIO/PPS API accepts physical remappable pins only. On the supported
-CK parts these are `RP32` through `RP79` on ports B, C, and D. Virtual PPS pins
-are internal routing resources and are not GPIO handles.
+The GPIO RP API maps physical pins: `RP32..47` to B, `RP48..63` to C,
+and `RP64..79` to D. CK1024MP710 adds `RP80..95` on F and `RP96..99`
+on A5..A8. Extended mappings require the selected DFP's RP alias;
+`NORA_GPIO_RP_MAX` is the family upper bound, not a pad count. Legacy B/C/D
+conversion is arithmetic and alone does not validate package availability.
+Port F GPIO and change notification are enabled only when their SFRs exist.
+The PPS route APIs also accept virtual `RP176..181` for internal routing;
+virtual endpoints are excluded from GPIO conversion and physical-pad lookup.
 
 PPS lock changes must use `__builtin_write_RPCON()`; direct writes to the lock
 bit do not perform the required unlock sequence. Register banks are not a
 contiguous pin-number array, so output routing uses the device-specific lookup
 helpers rather than computed register pointers.
+Readback uses the DFP output-field mask (6-bit on earlier parts, 7-bit on
+MP710). Sparse MC005 RPOR banks differ from the packed MC105 banks.
+See [CK1024 port status](ck1024_touch_can_lin_port.md) for offline verification
+and remaining board integration.
 
 ## SPI, I2S, and TDM
 

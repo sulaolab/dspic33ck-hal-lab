@@ -20,6 +20,8 @@
  * Absent for builds made any other way -- ?gv then says so rather than lying. */
 #if defined(EV88G73A_HAVE_BUILD_ID_H)
 #include "ev88g73a_build_id.h"
+#elif defined(EV97U97A_HAVE_BUILD_ID_H)
+#include "ev97u97a_build_id.h"
 #endif
 
 void general_console_onmsg(app_console_msg_t *msg)
@@ -46,6 +48,8 @@ void general_console_onmsg(app_console_msg_t *msg)
         console_out_str(" CK console-v2 HAL-Lab ");
 #if defined(EV88G73A_HAVE_BUILD_ID_H)
         console_out_str(EV88G73A_BUILD_ID);
+#elif defined(EV97U97A_HAVE_BUILD_ID_H)
+        console_out_str(EV97U97A_BUILD_ID);
 #else
         console_out_str("(not stamped)");
 #endif

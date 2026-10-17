@@ -34,9 +34,12 @@ files include configuration guards so an incorrect inclusion is diagnosed at
 build time instead of compiling one board's register writes into another board
 image.
 
-`CK64MC105_EV88G73A` is the default profile. `CK256MP508_DM330030` remains a
+`CK256MC005_EV08P02A` is the default profile. `CK64MC105_EV88G73A` was retired
+on 2026-10-15 (last buildable tree: development archive, not this public
+snapshot; maintainer tag `ck-ev88g73a-final-20261014`); `src/boards/ev88g73a`
+is kept. `CK256MP508_DM330030` remains a
 separate build profile with its own device, linker script, and board source.
-Neither profile may assume the other's pin routing, debugger, oscillator, or
+No profile may assume another's pin routing, debugger, oscillator, or
 codec-clock arrangement.
 
 ## Audio and console boundaries

@@ -86,6 +86,7 @@ static const dma_ch_regs_t *dma_regs(nora_dma_channel_t ch)
 #define DMA_CHSEL_SPI2_TX   (0x11u)
 #define DMA_CHSEL_SPI3_RX   (0x62u)   /* MP508 only (Reserved on MC105)        */
 #define DMA_CHSEL_SPI3_TX   (0x63u)
+#define DMA_CHSEL_PWM_EVENT_A (0x19u) /* PWM Event A, MC005 Table 10-1 */
 
 /* Returns false if this device has no such trigger, leaving *chsel untouched.
  *
@@ -105,6 +106,7 @@ static bool dma_trigger_to_chsel(nora_dma_trigger_t trigger, uint16_t *chsel)
     case NORA_DMA_TRIGGER_SPI1_TX: *chsel = DMA_CHSEL_SPI1_TX; return true;
     case NORA_DMA_TRIGGER_SPI2_RX: *chsel = DMA_CHSEL_SPI2_RX; return true;
     case NORA_DMA_TRIGGER_SPI2_TX: *chsel = DMA_CHSEL_SPI2_TX; return true;
+    case NORA_DMA_TRIGGER_PWM_EVENT_A: *chsel = DMA_CHSEL_PWM_EVENT_A; return true;
 #if defined(SPI3CON1L)
     case NORA_DMA_TRIGGER_SPI3_RX: *chsel = DMA_CHSEL_SPI3_RX; return true;
     case NORA_DMA_TRIGGER_SPI3_TX: *chsel = DMA_CHSEL_SPI3_TX; return true;
@@ -247,6 +249,11 @@ void nora_dma_global_init(void)
      * every transfer is terminated on its first element. */
     DMAL = (uint16_t)NORA_DMA_ADDR_LIMIT_LOW;
     DMAH = (uint16_t)NORA_DMA_ADDR_LIMIT_HIGH;
+#if defined(DMAHIGHLOWH)
+    /* This backend exposes 16-bit addresses; MP710 audio buffers stay in
+     * low RAM. Explicitly clear the extended address window on re-init. */
+    DMAHIGHLOWH = 0u;
+#endif
 
     /* Turn the controller on. Safe to call more than once. */
     nora_dma_reg_set16(&DMACON, NORA_DMA_DSPIC33CK_CON_DMAEN);
@@ -337,6 +344,16 @@ bool nora_dma_channel_config(nora_dma_channel_t ch, const nora_dma_channel_cfg_t
      * ping-pong audio buffer that is a permanent one-element phase slip rather than an
      * obvious failure, so it is worth stating the source. Measured on hardware: with
      * count = 4 the old code moved exactly 3 elements. */
+#if defined(DMASRCDSTH0)
+    /* Channels 0..3 use the same low-RAM address contract on MP710. */
+    switch (ch) {
+    case NORA_DMA_CHANNEL_0: DMASRCDSTH0 = 0u; break;
+    case NORA_DMA_CHANNEL_1: DMASRCDSTH1 = 0u; break;
+    case NORA_DMA_CHANNEL_2: DMASRCDSTH2 = 0u; break;
+    case NORA_DMA_CHANNEL_3: DMASRCDSTH3 = 0u; break;
+    default: return false;
+    }
+#endif
     *r->SRC = (uint16_t)(uintptr_t)cfg->src;
     *r->DST = (uint16_t)(uintptr_t)cfg->dst;
     *r->CNT = (uint16_t)cfg->count;

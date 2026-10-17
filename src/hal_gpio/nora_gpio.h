@@ -85,17 +85,18 @@ nora_gpio_level_t nora_gpio_read_output(nora_gpio_pin_t pin);
 /*
  * RP-first API.
  *
- * CK uses the classic flat map RPn = 16*(port+1) + bit, so only ports B/C/D are
- * remappable: RB0 = RP32 .. RD15 = RP79 (48 physical pins). This differs from
- * the AK packed-pin+1 encoding, but the public API stays AK-shaped and the CK
- * conversion is handled in the implementation. Port A/E have no RPn, and the
- * virtual RPV0-5 outputs are not exposed through this GPIO-typed API (mirroring
- * the AK HAL's treatment of its own RPV range).
+ * Physical map: RP32..47 = RB0..15, RP48..63 = RC0..15,
+ * RP64..79 = RD0..15. Devices such as CK1024MP710 additionally have
+ * RP80..95 = RF0..15 and RP96..99 = RA5..8. Extended mappings are accepted
+ * only when the selected DFP defines the RP. The legacy B/C/D conversions
+ * remain arithmetic; conversion alone does not prove a package pad exists.
+ * Port E and virtual RPV0..5 have no GPIO RP mapping.
+ * The public API shape is shared with AK; the encoding is device-specific.
  */
 typedef uint8_t nora_gpio_rp_t;
 
 #define NORA_GPIO_RP_MIN  (32u)   /* RB0 */
-#define NORA_GPIO_RP_MAX  (79u)   /* RD15 (last physical remappable pin) */
+#define NORA_GPIO_RP_MAX  (99u)   /* family upper bound; not a count of available pads */
 
 /*
  * These two spell the RP number as nora_gpio_rp_t, which is what the AK public

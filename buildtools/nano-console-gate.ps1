@@ -93,7 +93,7 @@ function Invoke-BestEffortAudioStop {
           owner reports is a noisy one. The check itself was right and its subject
           was wrong -- so the subject is now the caller's to state.
         #>
-        [string]$ExpectedProfile = 'ck',
+        [string]$ExpectedProfile = 'ck-nano',
         [int]$TimeoutSec = 5,
         [int]$SettleMs = 1500,
         # Opt-in strictness for a board known to be alive: turns "not verified"
@@ -196,7 +196,7 @@ function Resolve-MonitorKitSerial {
       hardware:
 
         USB\VID_03EB&PID_2175&MI_01\6&2179F488&0&0001   (the CDC child)
-          parent -> USB\VID_03EB&PID_2175\MC020023603RYN000772
+          parent -> USB\VID_03EB&PID_2175\<kit-serial>
                                           ^^^^^^^^^^^^^^^^^^^^ = KIT-INFO.TXT's
                                                                  serial exactly
 

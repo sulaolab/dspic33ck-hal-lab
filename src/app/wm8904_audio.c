@@ -15,6 +15,7 @@
 #include "nora_spi_i2s_tdm_conf.h"   /* geometry: SLOTS_PER_FS / BLOCK_FRAMES */
 #include "nora_high_res_timer.h"     /* load-monitor time base */
 #include "nora_clock.h"              /* Fcy for that time base */
+#include "nora_dma.h"
 #include "wm8904.h"
 #include "wm8904_port.h"                  /* APP_USE_1_BIT_DELAY: the codec's framing choice,
                                            * which the transport's SPIFE must be derived from
@@ -141,6 +142,22 @@ static int32_t s_chain[(size_t)NORA_TDM_BLOCK_FRAMES * WM8904_AUDIO_CHAIN_SLOTS]
  */
 static bool          s_avas_on;
 static volatile bool s_chain_avas_run;
+
+/*
+ * AVAS level trim (`-` / `=` `+` keys), whole dB above the voice's own level, 0..
+ * WM8904_AUDIO_AVAS_TRIM_MAX_DB. Same feature as sonora's AK Nano: 0 dB at boot and again
+ * at every AVAS start, so a session never inherits the previous one's level.
+ *
+ * The foreground writes only the TARGET mantissa, one 16-bit word (atomic on this core);
+ * the block ISR owns the applied one and walks it a quarter of the remaining distance per
+ * block (~3 ms to 1/e at 48 kHz/32 frames), so a 1 dB key press is not a step. At 0 dB the
+ * stage is skipped per block, exactly as GAIN_DB_IS_UNITY skips PRE/POST.
+ */
+#define WM8904_AUDIO_AVAS_TRIM_MAX_DB   20
+static int8_t            s_avas_trim_db;
+static volatile uint16_t s_avas_trim_target = GAIN_DB_MANT_ONE;
+static uint16_t          s_avas_trim_mant   = GAIN_DB_MANT_ONE;
+static volatile uint16_t s_avas_trim_nsat;    /* clamped samples, cleared on report */
 
 static bool     s_button_prev;
 /* One throttled console line's state -- see due_ms(). */
@@ -766,7 +783,10 @@ static void path_gain(const nora_tdm_slot_t *src,
 /* `?tl`, not off the boot log; an overrun shows up as miss>0 and a negative    */
 /* margin, not as bad audio.                                                   */
 /* -------------------------------------------------------------------------- */
+/* A board profile that ships a non-zero POST overrides this to keep the ear-set level. */
+#ifndef WM8904_AUDIO_AVAS_SHIFT
 #define WM8904_AUDIO_AVAS_SHIFT  14
+#endif
 
 /*
  * Saturating 32-bit add, in unsigned arithmetic so the wrap it tests for is defined.
@@ -787,15 +807,34 @@ static inline int32_t chain_sat_add(int32_t a, int32_t b)
 
 static void chain_stage_avas(void)
 {
-    size_t frame;
+    size_t   frame;
+    uint16_t nsat = 0u;
+    uint16_t mant = s_avas_trim_mant;
+    const uint16_t target = s_avas_trim_target;
+
+    /* The level-trim ramp, once per block; see s_avas_trim_target. */
+    if (mant < target) {
+        mant = (uint16_t)(mant + (uint16_t)(((uint16_t)(target - mant) + 3u) >> 2));
+    } else if (mant > target) {
+        mant = (uint16_t)(mant - (uint16_t)(((uint16_t)(mant - target) + 3u) >> 2));
+    }
+    s_avas_trim_mant = mant;
 
     for (frame = 0u; frame < (size_t)NORA_TDM_BLOCK_FRAMES; frame++) {
-        const int32_t sample = (int32_t)avas_line_ck_process_sample(&s_avas)
+        int32_t       sample = (int32_t)avas_line_ck_process_sample(&s_avas)
                                << WM8904_AUDIO_AVAS_SHIFT;
         const size_t  at     = frame * WM8904_AUDIO_CHAIN_SLOTS;
 
+        if (!GAIN_DB_IS_UNITY(mant)) {
+            sample = gain_db_scale(sample, mant, &nsat);
+        }
+
         s_chain[at + 0u] = chain_sat_add(s_chain[at + 0u], sample);
         s_chain[at + 1u] = chain_sat_add(s_chain[at + 1u], sample);
+    }
+
+    if (nsat != 0u) {
+        s_avas_trim_nsat = (uint16_t)(s_avas_trim_nsat + nsat);
     }
 }
 
@@ -892,14 +931,12 @@ static void path_chain(const nora_tdm_slot_t *src,
      * 4. TDMout, with POST folded into the encode -- the mirror of stage 1b.
      *
      *    AFTER the mix, so POST scales the AVAS synth by the same dB as the input. That is
-     *    what "output gain" means, and it is why the analog-attenuation compensation is
-     *    carried by PRE instead (0.0 dB ships here, i.e. the identity): PRE lifts only the
-     *    input and leaves WM8904_AUDIO_AVAS_SHIFT's ear-set level alone. A non-zero POST
-     *    moves the synth too, and the fix if that is then too loud is that shift, not this
-     *    stage.
+     *    what "output gain" means. A board that carries its analog-attenuation compensation
+     *    here (EV08P02A: +12.0 dB, for headroom inside the chain) moves the synth too, and
+     *    the fix for that is WM8904_AUDIO_AVAS_SHIFT in its profile, not this stage.
      *
-     *    Unity is skipped per block, as in 1b -- and this is the stage where that matters
-     *    most, because 0.0 dB is what ships here.
+     *    Unity is skipped per block, as in 1b -- on the boards that ship POST 0.0 dB this
+     *    is the stage where that matters most.
      */
     if (GAIN_DB_IS_UNITY(post_mant)) {
         for (frame = 0u; frame < (size_t)NORA_TDM_BLOCK_FRAMES; frame++) {
@@ -971,6 +1008,10 @@ static void wm8904_audio_block_cb(const nora_tdm_slot_t *src,
         break;
     }
 
+    if ((s_cfg != NULL) && (s_cfg->port != NULL) &&
+        (s_cfg->port->output_block != NULL)) {
+        s_cfg->port->output_block(dst);
+    }
     wm8904_audio_output_activity_observe(dst);
 }
 
@@ -1337,6 +1378,10 @@ void wm8904_audio_start(const wm8904_audio_config_t *cfg)
      * and the `a` / `A` voice keys (or `*cy00` for Type_TY) start it. */
     s_avas_rate_ok   = avas_rate_matches(cfg);
     avas_line_ck_init(&s_avas);
+#ifdef WM8904_AUDIO_AVAS_BOOT_PARTS
+    /* A board profile may boot with some parts off (*tb), e.g. for CPU budget. */
+    avas_line_ck_set_parts(&s_avas, (uint8_t)(WM8904_AUDIO_AVAS_BOOT_PARTS));
+#endif
     s_avas_on        = false;
     s_chain_avas_run = false;
     s_mute_request     = 0u;
@@ -1456,6 +1501,10 @@ void wm8904_audio_start(const wm8904_audio_config_t *cfg)
         return;
     }
 
+    if ((cfg->port->output_start != NULL) && !cfg->port->output_start()) {
+        console_out_str("WM8904 audio: secondary output failed to start; codec continues\n");
+    }
+
     /* 5) Unmute the headphone output (startup default is analog mute).  A failure here is
      * worth a line for the same reason the mute in stop() is: the transport is running and
      * the banner below will say so, but a codec that did not take the unmute is silent, and
@@ -1511,6 +1560,9 @@ void wm8904_audio_stop(void)
      */
     if (s_cfg != NULL) {
         mute_ok = wm8904_set_analog_output_mute(s_cfg->i2c_inst_legacy, true);
+        if ((s_cfg->port != NULL) && (s_cfg->port->output_stop != NULL)) {
+            s_cfg->port->output_stop();
+        }
     }
 
     /*
@@ -2288,6 +2340,35 @@ void wm8904_audio_button_poll(void)
     s_button_prev = pressed;
 }
 
+bool wm8904_audio_mute_requested(void)
+{
+    return s_mute_request != 0u;
+}
+
+void wm8904_audio_mute_report(void)
+{
+    uint32_t state, target;
+    uint8_t applied;
+    gain_ctrl_ramp_status_t status;
+    /* The audio ISR owns these multiword fields: copy with its IRQ masked,
+     * then print after restoring. No console calls inside the critical section. */
+    const nora_dma_channel_t rx = (nora_dma_channel_t)NORA_TDM_SPI1_RX_DMA;
+    bool irq_enabled = nora_dma_irq_is_enabled(rx);
+    nora_dma_irq_enable(rx, false);
+    state = s_gain.state;
+    target = s_gain.target;
+    status = s_gain.status;
+    applied = s_mute_applied;
+    nora_dma_irq_restore(rx, irq_enabled);
+    console_out_str("MUTE requested="); console_out_u32(s_mute_request);
+    console_out_str(" applied="); console_out_u32(applied);
+    console_out_str(" gain_q15="); console_out_u32(state >> 16);
+    console_out_str(" target_q15="); console_out_u32(target >> 16);
+    console_out_str(" status="); console_out_u32(status);
+    console_out_str(" ramp_ms="); console_out_u32(s_cfg ? s_cfg->gain_ramp_ms : 0u);
+    console_out_str("\n");
+}
+
 /*
  * Console RX health, appended to the periodic line -- RESIDENT BUT SILENT WHILE HEALTHY.
  *
@@ -2652,6 +2733,15 @@ static void avas_enable_set(bool on)
      * a fade it deliberately does NOT reset, because a phase jump there is a click; the
      * synth simply ramps back up from wherever it had decayed to. sonora's
      * app_avas_ty_set_enable() is the same rule. */
+    /* Every start begins at the voice's own level (sonora AK Nano rule). Reset here and
+     * not at stop, so the release tail keeps the level it was sounding at. */
+    if (s_avas_trim_db != 0) {
+        console_out_str(" AVAS gain reset: +");
+        console_out_u32((uint32_t)s_avas_trim_db);
+        console_out_str(" -> +0 dB (start)\n");
+        wm8904_audio_avas_gain_step((int16_t)-s_avas_trim_db);
+    }
+
     s_avas_on = true;
     avas_line_ck_gate_on(&s_avas);
     avas_line_ck_request_pitch_cent(&s_avas, s_avas_pot_pitch_cent);
@@ -2781,6 +2871,25 @@ void wm8904_audio_avas_voice_key(uint8_t voice)
         return;                                        /* prints the reason */
     }
     avas_enable_set(true);
+}
+
+void wm8904_audio_avas_button(void)
+{
+    static uint8_t next_voice = WM8904_AUDIO_AVAS_VOICE_TYPE_TY;
+    if (s_avas_on) {
+        avas_enable_set(false);
+        return;
+    }
+    if (avas_is_sounding()) {
+        console_out_str("SW0 AVAS: release tail active; retry after fade\n");
+        return;
+    }
+    if (!avas_voice_set(next_voice)) return;
+    avas_enable_set(true);
+    if (s_avas_on) {
+        next_voice = next_voice == WM8904_AUDIO_AVAS_VOICE_TYPE_TY ?
+            WM8904_AUDIO_AVAS_VOICE_TYPE_LB : WM8904_AUDIO_AVAS_VOICE_TYPE_TY;
+    }
 }
 
 void wm8904_audio_path_report(void)
@@ -3044,6 +3153,39 @@ void wm8904_audio_avas_pitch_step(int16_t delta_cent)
                         + (int32_t)delta_cent;
 
     avas_pitch_request_and_report(" pitch (arrow key) = ", (int16_t)next);
+}
+
+void wm8904_audio_avas_gain_report(void)
+{
+    const uint16_t nsat = s_avas_trim_nsat;
+
+    s_avas_trim_nsat = 0u;
+    console_out_str(" AVAS gain = +");
+    console_out_u32((uint32_t)s_avas_trim_db);
+    console_out_str(" dB");
+    if ((s_avas_trim_db == 0) || (s_avas_trim_db == WM8904_AUDIO_AVAS_TRIM_MAX_DB)) {
+        console_out_str(" [limit]");
+    }
+    if (nsat != 0u) {
+        console_out_str(" (clamped ");
+        console_out_u32((uint32_t)nsat);
+        console_out_str(" samples since last report)");
+    }
+    console_out_str("\n");
+}
+
+void wm8904_audio_avas_gain_step(int16_t delta_db)
+{
+    int16_t   db = (int16_t)(s_avas_trim_db + delta_db);
+    gain_db_t g;
+
+    if (db > WM8904_AUDIO_AVAS_TRIM_MAX_DB) { db = WM8904_AUDIO_AVAS_TRIM_MAX_DB; }
+    if (db < 0)                             { db = 0; }
+
+    gain_db_from_half((int16_t)(db * 2), &g);
+    s_avas_trim_db     = (int8_t)db;
+    s_avas_trim_target = g.mant;
+    wm8904_audio_avas_gain_report();
 }
 
 void wm8904_audio_load_line_set(bool on)

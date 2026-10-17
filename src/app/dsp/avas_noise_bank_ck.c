@@ -25,6 +25,41 @@ static int16_t noise_white(uint32_t *state)
     return (int16_t)(x >> 16);
 }
 
+/* THE ACCUMULATOR SHIM.  The per-sample loop is written once, on the dsPIC's two
+ * 40-bit DSP accumulators, and this block says what each step means so the host can
+ * run the SAME loop source (tools/host_check/run_noise_check.py compiles this file).
+ *
+ * Target facts (read, not assumed -- the same three avas_synth_line_ck.c documents):
+ * CORCON at reset is fractional (IF = 0), no accumulator saturation (SATA/SATB = 0,
+ * 40-bit wrap), saturating store (SATDW = 1).  So `mpy`/`mac`/`msc` add 2*x*y, and
+ * `sac acc, #0` stores acc[31:16] = floor(sum / 2^15) -- the model's floor shift --
+ * clamped to int16.  The host model below is exactly that, in int64_t.
+ *
+ * Every operand here is a coefficient in [0, 32767] or a signed int16 state, so the
+ * one fractional product that overflows (-32768 * -32768) cannot occur. */
+#if defined(__XC_DSC__) || defined(__XC16__)
+#pragma GCC diagnostic ignored "-Wvolatile-register-var"
+#define NB_ACC(name, reg)   volatile register int16_t name asm(reg)
+#define NB_CLR(acc)         ((acc) = __builtin_clr())
+#define NB_MPY(acc, x, y)   ((acc) = __builtin_mpy_16((x), (y)))
+#define NB_MAC(acc, x, y)   ((acc) = __builtin_mac_16((acc), (x), (y)))
+#define NB_MSC(acc, x, y)   ((acc) = __builtin_msc_16((acc), (x), (y)))
+#define NB_SAC(acc)         ((int16_t)__builtin_sac_16((acc), 0))
+#else
+#define NB_ACC(name, reg)   int64_t name
+#define NB_CLR(acc)         ((acc) = 0)
+#define NB_MPY(acc, x, y)   ((acc) = 2 * (int64_t)(x) * (int64_t)(y))
+#define NB_MAC(acc, x, y)   ((acc) += 2 * (int64_t)(x) * (int64_t)(y))
+#define NB_MSC(acc, x, y)   ((acc) -= 2 * (int64_t)(x) * (int64_t)(y))
+#define NB_SAC(acc)         nb_sac_host(acc)
+static int16_t nb_sac_host(int64_t acc)
+{
+    int64_t v = acc >> 16;      /* arithmetic, as the stored bits [31:16] are */
+
+    return (int16_t)(v > 32767 ? 32767 : (v < -32768 ? -32768 : v));
+}
+#endif
+
 void avas_noise_bank_ck_init(avas_noise_bank_ck_t *b)
 {
     uint16_t i;
@@ -84,7 +119,12 @@ void avas_noise_bank_ck_update_gusts(avas_noise_bank_ck_t *b)
 
 int16_t avas_noise_bank_ck_sample(avas_noise_bank_ck_t *b)
 {
-    int32_t acc = 0L;
+    NB_ACC(t, "A");             /* per-band scratch */
+    NB_ACC(acc, "B");           /* the gain-weighted sum, across all bands */
+    const int16_t *fp = s_ck_type_lb_noise_f_q15;
+    const int16_t *gp = b->gain;
+    int16_t *lop = b->low;
+    int16_t *bdp = b->band;
     int16_t w;
     uint16_t i;
 
@@ -101,43 +141,55 @@ int16_t avas_noise_bank_ck_sample(avas_noise_bank_ck_t *b)
               * ((int32_t)noise_white(&b->rng) - (int32_t)(int16_t)(b->pre >> 15));
     w = (int16_t)(b->pre >> 15);
 
+    NB_CLR(acc);
     for (i = 0u; i < AVAS_TYPE_LB_CK_NOISE_BANDS; i++) {
-        int16_t bd = b->band[i];
-        int16_t f = s_ck_type_lb_noise_f_q15[i];
-        int32_t lo;
-        int32_t hi;
+        const int16_t f  = *fp++;
+        const int16_t bd = *bdp;
+        const int16_t lo = *lop;
+        int16_t fb;
+        int16_t qb;
 
         /*  low  += F*band
          *  high  = in - low - Q1*band
          *  band += F*high
          *
-         * `high` is int32_t and that is deliberate.  Its OBSERVED peak is 20 451 over
-         * 20 s, which would fit an int16 -- but its arithmetic bound is
-         * |w| + |low| + |Q1*band| ~ 54 800, so int16 here would be trusting a 1.6x
-         * margin from one 20 s realisation instead of a bound.  A wrap would inject a
-         * full-scale impulse into a NOISE signal, which is precisely the defect an ear
-         * cannot audit.  int32 also makes this line exactly the reference model's, whose
-         * `hi` is an unbounded Python int -- so the cost is a 16x32 multiply, about two
-         * instructions a band, and bit-exactness comes free with it.
+         * `high` is never formed, and that is how its width stops mattering.  Its
+         * arithmetic bound is |w| + |low| + |Q1*band| ~ 54 800 -- past int16, which is
+         * why the C form held it in int32_t and paid a 16x32 multiply per band.  But
+         * F*high distributes:
          *
-         * `low` and `band` ARE int16_t, and that is not the same gamble: the reference
-         * model wraps them to 16 bits explicitly, so truncation here is the specified
-         * behaviour rather than an overflow.  The generator additionally measures that
-         * they never get there (16 925 and 13 655 of 32 767). */
-        lo = (int32_t)b->low[i] + (((int32_t)f * (int32_t)bd) >> 15);
-        b->low[i] = (int16_t)lo;
-        hi = (int32_t)w - lo
-             - (((int32_t)AVAS_TYPE_LB_CK_NOISE_Q1_Q15 * (int32_t)bd) >> 15);
-        bd = (int16_t)((int32_t)bd + (((int32_t)f * (int32_t)hi) >> 15));
-        b->band[i] = bd;
+         *   F*high = F*w - F*low_old - F*fb - F*qb,   fb = F*band>>15, qb = Q1*band>>15
+         *
+         * four 16x16 products summed EXACTLY in the 40-bit accumulator, then one
+         * floor shift -- the model's `(fq * hi) >> 15` with hi an unbounded integer,
+         * bit for bit.  |2*F*high| <= 2*8874*54800 < 2^31, so the sac neither
+         * saturates nor wraps.  `low` and `band` are int16_t and wrap on store, which
+         * is the model's specified behaviour (it wraps them explicitly), and the
+         * generator measures they never get there (16 925 and 13 655 of 32 767).
+         *
+         * Before this (2026-10-14) the loop was ~43 instructions a band and the
+         * Type_LB block ISR ran out of its 667 us with the bank on. */
+        NB_MPY(t, f, bd);
+        fb = NB_SAC(t);
+        NB_MPY(t, AVAS_TYPE_LB_CK_NOISE_Q1_Q15, bd);
+        qb = NB_SAC(t);
+        *lop++ = (int16_t)((uint16_t)lo + (uint16_t)fb);
+        NB_MPY(t, f, w);
+        NB_MSC(t, f, lo);
+        NB_MSC(t, f, fb);
+        NB_MSC(t, f, qb);
+        *bdp = (int16_t)((uint16_t)bd + (uint16_t)NB_SAC(t));
 
-        acc += (int32_t)b->gain[i] * (int32_t)bd;
+        NB_MAC(acc, *gp++, *bdp++);
     }
-    acc >>= 15;
 
     /* Counts -> the engine's A_SCALE units, so the caller can simply ADD this to the
      * carrier sum.  The gain is k * A_SCALE, both measured: there is no free parameter
-     * anywhere in this file's level. */
-    return (int16_t)((acc * (int32_t)AVAS_TYPE_LB_CK_NOISE_GAIN_Q15)
+     * anywhere in this file's level.
+     *
+     * sac B is the old `acc >>= 15` with a clamp at int16.  The generator's peak is
+     * 18 503 counts; past 32 767 the old form would have wrapped in the multiply
+     * below, so the clamp only replaces a wrap that was never reached. */
+    return (int16_t)(((int32_t)NB_SAC(acc) * (int32_t)AVAS_TYPE_LB_CK_NOISE_GAIN_Q15)
                      >> AVAS_TYPE_LB_CK_NOISE_GAIN_SHIFT);
 }

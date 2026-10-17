@@ -12,13 +12,15 @@ tools that the project uses.
 | `build.ps1` | Build, clean, or regenerate MPLAB makefiles for a configuration. |
 | `check-tdm-feasibility.ps1` | Compile the CK framed-TDM feasibility probe without linking it into firmware. |
 | `check-dma-feasibility.ps1` | Compile the CK DMA ping-pong feasibility probe without linking it into firmware. |
-| `flash-curiositynano.ps1` | Program the EV88G73A Curiosity Nano through its mass-storage interface. |
-| `flashauto.ps1` | Program or reset the DM330030 profile through PKOB4. |
+| `flash-mdb-nano.ps1` | Program the EV08P02A Curiosity Nano with mdb in programmer mode, behind the pre-flash mute. |
+| `flash-curiositynano.ps1` | Program a Curiosity Nano through its mass-storage interface (only kits whose `KIT-INFO.TXT` says `Drag and drop: Yes`; EV08P02A says No). |
+| `flashauto.ps1` | Program or reset DM330030 / EV97U97A through PKoB4. |
+| `identify-pkob4.ps1` | Map PKoB4 USB serial to CDC COM; optionally probe a named MCU without programming. |
 
 ## Build
 
 ```powershell
-# Incremental default build: EV88G73A + WM8904
+# Incremental default build: EV08P02A + WM8904
 .\buildtools\build.ps1
 
 # Clean default build
@@ -28,7 +30,7 @@ tools that the project uses.
 .\buildtools\build.ps1 -Full -Configuration CK256MP508_DM330030
 
 # Regenerate MPLAB makefiles after changing configurations.xml
-.\buildtools\build.ps1 -Generate -Configuration CK64MC105_EV88G73A
+.\buildtools\build.ps1 -Generate -Configuration CK256MC005_EV08P02A
 
 # Remove generated outputs
 .\buildtools\build.ps1 -Clean
@@ -38,7 +40,9 @@ tools that the project uses.
 .\buildtools\check-dma-feasibility.ps1
 ```
 
-`CK64MC105_EV88G73A` is the default and hardware-verified profile.
+`CK256MC005_EV08P02A` is the default profile. `CK64MC105_EV88G73A` was retired
+on 2026-10-15; its last buildable tree is retained in the development archive,
+not in this public snapshot (maintainer tag `ck-ev88g73a-final-20261014`).
 `CK256MP508_DM330030` is build-verified only. Board-owned source files have
 configuration guards, so an incorrect inclusion fails the build instead of
 silently applying one board's register settings to another.
@@ -46,30 +50,31 @@ silently applying one board's register settings to another.
 ## Program a board
 
 ```powershell
-# EV88G73A Curiosity Nano: list or program the mass-storage target
-.\buildtools\flash-curiositynano.ps1 -List
-.\buildtools\flash-curiositynano.ps1
+# EV08P02A Curiosity Nano: mdb in programmer mode (this kit has no drag-and-drop)
+.\buildtools\flash-mdb-nano.ps1 -DryRun
+.\buildtools\flash-mdb-nano.ps1
 
 # DM330030: list the available PKOB4 target, then program a selected board
 .\buildtools\flashauto.ps1 -List
 .\buildtools\flashauto.ps1 -Configuration CK256MP508_DM330030 -Serial <SERIAL>
 ```
 
-The EV88G73A and DM330030 use different programming mechanisms. Do not use a
+The EV08P02A and DM330030 use different programming mechanisms. Do not use a
 successful operation on one profile as evidence that the other profile was
 programmed or verified.
 
 ## Audio-safe programming
 
-Before programming a running EV88G73A audio board, stop the stream and confirm
-that the codec is analog-muted. `flash-curiositynano.ps1` performs this check
-by default and refuses the copy if the expected confirmation is absent.
+Before programming a running EV08P02A audio board, stop the stream and confirm
+that the codec is analog-muted. `flash-mdb-nano.ps1` sends `*ts` and waits a
+bounded time for the confirmation by default; `-RequireVerifiedMute` makes it
+refuse the write when the confirmation is absent.
 
 The opt-out is intentional and should be used only after the output has been
 made safe by another means:
 
 ```powershell
-.\buildtools\flash-curiositynano.ps1 -StopAudioCommand none
+.\buildtools\flash-mdb-nano.ps1 -StopAudioCommand none
 ```
 
 After programming, power-cycle the kit before judging audible output. The
@@ -86,3 +91,43 @@ installed toolchain requires it:
 ```
 
 Generated makefiles and build outputs can be removed with `build.ps1 -Clean`.
+
+## EV97U97A / WM8904
+
+Build with `build.ps1 -Configuration CK1024MP710_EV97U97A`. WM8904 uses
+mikroBUS A / J9 and its XTAL-to-MCLK jumper setting. The 2026-10-13 bring-up
+confirmed AVAS sound and POT pitch change; see
+[board port and operation guide](../docs/ck1024_touch_can_lin_port.md).
+
+Before **flash, reset, or an MDB identity probe**, send `*ts` through the
+serial-monitor bridge, confirm the fresh response
+`analog mute verified, TDM/DMA halted`, and allow 1.5 seconds to settle.
+Stopping AVAS or pressing the DSP mute button does not replace analog mute.
+Use `/command_wait` to arm the reply matcher before the command.
+
+For this configuration, `flashauto.ps1` performs the stop automatically and
+requires its confirmation. It resolves the monitor URL from the local
+serial-monitor configuration, checks profile `ck`, and maps the monitor COM
+back to the selected PKoB4 USB serial before sending anything. `-MonitorRoot`
+can locate a separate serial-monitor checkout; `-MonitorUrl` accepts a URL
+already resolved by the operator. No COM port is opened directly.
+
+```powershell
+# List only: no target reset and no COM open
+.\buildtools\identify-pkob4.ps1 -Json
+
+# Dry-run includes the planned stop, without sending it
+.\buildtools\flashauto.ps1 -Configuration CK1024MP710_EV97U97A `
+    -Serial <SERIAL> -ToolsDir <HELPER_DIRECTORY> -DryRun
+
+# Strict *ts / analog mute readback / settle, then flash and reset
+.\buildtools\flashauto.ps1 -Configuration CK1024MP710_EV97U97A `
+    -Serial <SERIAL> -ToolsDir <HELPER_DIRECTORY>
+```
+
+After flash/reset, startup resumes audio automatically. Check `?gv` and `?ts`;
+a manual stop can be undone with `*tr`. For recovery of an unresponsive image,
+first disconnect or externally mute the analog output, then explicitly use
+`-StopAudioCommand none`. This override is not the normal programming sequence.
+The stop sequence reduces programming POP risk; pop-free startup and analog
+output quality have not been qualified.

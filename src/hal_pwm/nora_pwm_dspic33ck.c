@@ -58,6 +58,9 @@ static void nora_pwm_pg##n##_set_duty(uint16_t duty)                           \
 NORA_PWM_DEFINE_GENERATOR(1)
 NORA_PWM_DEFINE_GENERATOR(2)
 NORA_PWM_DEFINE_GENERATOR(3)
+#if defined(PG4CONL)
+NORA_PWM_DEFINE_GENERATOR(4)
+#endif
 
 bool nora_pwm_module_init(nora_pwm_mclk_source_t source)
 {
@@ -79,7 +82,7 @@ bool nora_pwm_module_init(nora_pwm_mclk_source_t source)
     _PWMMD = 0u;
 #endif
 
-    /* Every PG uses its own PER/DC, sourced from the standard Fcy clock. */
+    /* CLKSEL=01 on each PG selects FOSC directly (not Fcy). */
     PCLKCONbits.MCLKSEL = 0u;
     PCLKCONbits.DIVSEL = 0u;
     MPER = 0u;
@@ -92,6 +95,9 @@ bool nora_pwm_module_init(nora_pwm_mclk_source_t source)
 
 bool nora_pwm_generator_is_present(nora_pwm_generator_id_t id)
 {
+#if !defined(PG4CONL)
+    if (id == NORA_PWM_GEN_4) return false;
+#endif
     return (unsigned)id < (unsigned)NORA_PWM_GEN_COUNT;
 }
 
@@ -109,6 +115,9 @@ bool nora_pwm_generator_init(nora_pwm_generator_id_t id,
     case NORA_PWM_GEN_1: nora_pwm_pg1_configure(cfg); break;
     case NORA_PWM_GEN_2: nora_pwm_pg2_configure(cfg); break;
     case NORA_PWM_GEN_3: nora_pwm_pg3_configure(cfg); break;
+#if defined(PG4CONL)
+    case NORA_PWM_GEN_4: nora_pwm_pg4_configure(cfg); break;
+#endif
     default: return false;
     }
 
@@ -130,6 +139,63 @@ void nora_pwm_generator_set_duty(nora_pwm_generator_id_t id, uint16_t duty)
     case NORA_PWM_GEN_1: nora_pwm_pg1_set_duty(duty); break;
     case NORA_PWM_GEN_2: nora_pwm_pg2_set_duty(duty); break;
     case NORA_PWM_GEN_3: nora_pwm_pg3_set_duty(duty); break;
+#if defined(PG4CONL)
+    case NORA_PWM_GEN_4: nora_pwm_pg4_set_duty(duty); break;
+#endif
     default: break;
+    }
+}
+
+/* Output override / run control, shared shape with the AK backend. */
+#define NORA_PWM_DEFINE_OVERRIDE(n)                                            \
+static void nora_pwm_pg##n##_override(bool enable, bool high, bool synchronous)\
+{                                                                              \
+    uint16_t value = PG##n##IOCONL;                                            \
+    value &= (uint16_t)~(_PG##n##IOCONL_OSYNC_MASK | _PG##n##IOCONL_OVRDAT_MASK |\
+                         _PG##n##IOCONL_OVRENH_MASK | _PG##n##IOCONL_OVRENL_MASK);\
+    /* OSYNC 00 = next SOC, 01 = immediate. */                                 \
+    if (!synchronous) value |= (uint16_t)(1u << _PG##n##IOCONL_OSYNC_POSITION);\
+    if (high) value |= _PG##n##IOCONL_OVRDAT_MASK;                             \
+    if (enable) value |= _PG##n##IOCONL_OVRENH_MASK | _PG##n##IOCONL_OVRENL_MASK;\
+    PG##n##IOCONL = value;                                                     \
+}                                                                              \
+static void nora_pwm_pg##n##_run(bool on)                                      \
+{                                                                              \
+    PG##n##CONLbits.ON = on ? 1u : 0u;                                         \
+}
+
+NORA_PWM_DEFINE_OVERRIDE(1)
+NORA_PWM_DEFINE_OVERRIDE(2)
+NORA_PWM_DEFINE_OVERRIDE(3)
+#if defined(PG4CONL)
+NORA_PWM_DEFINE_OVERRIDE(4)
+#endif
+
+bool nora_pwm_generator_override(nora_pwm_generator_id_t id, bool enable,
+                                 bool high, bool synchronous)
+{
+    if (!nora_pwm_generator_is_present(id) || !s_generator_ready[id]) return false;
+    switch (id) {
+    case NORA_PWM_GEN_1: nora_pwm_pg1_override(enable, high, synchronous); return true;
+    case NORA_PWM_GEN_2: nora_pwm_pg2_override(enable, high, synchronous); return true;
+    case NORA_PWM_GEN_3: nora_pwm_pg3_override(enable, high, synchronous); return true;
+#if defined(PG4CONL)
+    case NORA_PWM_GEN_4: nora_pwm_pg4_override(enable, high, synchronous); return true;
+#endif
+    default: return false;
+    }
+}
+
+bool nora_pwm_generator_run(nora_pwm_generator_id_t id, bool on)
+{
+    if (!nora_pwm_generator_is_present(id) || !s_generator_ready[id]) return false;
+    switch (id) {
+    case NORA_PWM_GEN_1: nora_pwm_pg1_run(on); return true;
+    case NORA_PWM_GEN_2: nora_pwm_pg2_run(on); return true;
+    case NORA_PWM_GEN_3: nora_pwm_pg3_run(on); return true;
+#if defined(PG4CONL)
+    case NORA_PWM_GEN_4: nora_pwm_pg4_run(on); return true;
+#endif
+    default: return false;
     }
 }

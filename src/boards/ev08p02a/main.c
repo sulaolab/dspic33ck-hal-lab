@@ -48,6 +48,10 @@
  * decided before the first conditional include that reads one. See the block further down for what
  * this replaced (two vocabularies for one decision). */
 #include "app_config.h"
+#include "ev08p02a_bench_controls.h"
+#if EV08P02A_PWM_AUDIO
+#include "ev08p02a_pwm_audio.h"
+#endif
 
 /*
  * BELOW app_config.h, not above it, and that placement is the whole point of the note
@@ -268,6 +272,28 @@ static const demo_tdm_master_loopback_port_t s_tdm_loopback_port = {
 #define EV08P02A_WM8904_DSPIC_IS_MASTER 0
 #endif
 
+static bool ev08p02a_mute_gesture(void)
+{
+    static ev08p02a_button_state_t state;
+    ev08p02a_button_action_t action =
+        ev08p02a_button_update(&state, ev08p02a_sw0_pressed(), GetTicks());
+    if (action == EV08P02A_BUTTON_LONG) {
+        console_out_str("SW0: AVAS long press (1500ms)\n");
+#if EV08P02A_ENABLE_ADC_POT
+        ev08p02a_avas_pot_rearm();
+#endif
+        wm8904_audio_avas_button();
+    }
+    return action == EV08P02A_BUTTON_SHORT;
+}
+
+static void ev08p02a_audio_led_poll(void)
+{
+    static ev08p02a_led_state_t state;
+    ev08p02a_led0_set(ev08p02a_led_update(&state,
+                         wm8904_audio_mute_requested(), GetTicks()));
+}
+
 static const wm8904_audio_port_t s_wm8904_port = {
     .configure_pins      = ev08p02a_tdm_pins_init,
     .i2c_init            = ev08p02a_i2c1_init,      /* same bus and pins as the I2C1 probe */
@@ -281,7 +307,12 @@ static const wm8904_audio_port_t s_wm8904_port = {
      * who wired it, 2026-08-09). So at A-extMCLK the codec is SYSCLK'd by our BRG, and what
      * this tree still lacks is only an MCLK STAGE, in either position. See ev08p02a_board.h
      * and plan doc 20.4 + 21. */
-    .mute_button_pressed = ev08p02a_sw0_pressed,    /* SW0, active-low, read raw */
+    .mute_button_pressed = ev08p02a_mute_gesture,
+#if EV08P02A_PWM_AUDIO
+    .output_block        = ev08p02a_pwm_audio_block,
+    .output_start        = ev08p02a_pwm_audio_start,
+    .output_stop         = ev08p02a_pwm_audio_stop,
+#endif
     /* From ev08p02a_pins.h, beside the RP numbers it describes. This line used to be a
      * hand-typed second copy of them. */
     .wiring              = EV08P02A_AUDIO_WIRING_STR,
@@ -355,7 +386,7 @@ static const wm8904_audio_config_t s_wm8904_audio = {
  *        used to be 1 cent and that alone did not fit the 64K EV88G73A image
  *        this profile was ported from). ?tc reports the committed and, if
  *        different, the still-pending value, both already snapped. The up/down
- *        arrow keys move in the same 5 cent steps -- see
+ *        arrow keys move by 10 cent, on the same 5 cent grid -- see
  *        ev08p02a_transport_console_hotkey() below
  *
  * TWO OF THESE ARE OPTIONAL: *tb/?tb and *tl are gated by
@@ -667,8 +698,20 @@ void ev08p02a_transport_console_onmsg(app_console_msg_t *msg)
 
         if (msg->kind == '?') {
             wm8904_audio_stop_report();
+#if EV08P02A_PWM_AUDIO
+            ev08p02a_pwm_audio_report();
+#endif
         } else {
+#if EV08P02A_PWM_AUDIO
+            /* Lab/scope PWM can run without a configured codec. Stop it
+             * unconditionally before the codec's I2C mute and TDM teardown;
+             * the configured output_stop callback may safely repeat this. */
+            ev08p02a_pwm_audio_stop();
+#endif
             wm8904_audio_stop();
+#if EV08P02A_PWM_AUDIO
+            ev08p02a_pwm_audio_report();
+#endif
         }
         msg->status = APP_CONSOLE_OK;
         return;
@@ -780,6 +823,10 @@ void ev08p02a_transport_console_onmsg(app_console_msg_t *msg)
  * That preserves the exclusive-voice and fade behaviour instead of manufacturing a
  * second enable flag beside the compatibility command.
  */
+/* Bench switch for the complete periodic report burst; explicit queries stay
+ * available. Kept in the foreground so audio/PG/DMA timing is unchanged. */
+static bool s_periodic_report_enabled = true;
+
 void ev08p02a_classic_console_onmsg(app_console_msg_t *msg)
 {
     uint8_t subcode;
@@ -787,6 +834,82 @@ void ev08p02a_classic_console_onmsg(app_console_msg_t *msg)
     if (msg == NULL) {
         return;
     }
+
+    if (msg->name == 'q') {
+        if (msg->kind == '*' && msg->data_len == 2u &&
+            msg->data[0] == 0u && msg->data[1] <= 1u) {
+            s_periodic_report_enabled = msg->data[1] != 0u;
+        } else if (!(msg->kind == '?' && msg->data_len == 0u)) {
+            msg->status = APP_CONSOLE_ERR_BAD_DATA;
+            return;
+        }
+        console_out_str("Periodic board reports: ");
+        console_out_str(s_periodic_report_enabled ? "ON\n" : "OFF\n");
+        msg->status = APP_CONSOLE_OK;
+        return;
+    }
+
+    if (msg->name == 'm' && msg->kind == '?' && msg->data_len == 0u) {
+        wm8904_audio_mute_report();
+        msg->status = APP_CONSOLE_OK;
+        return;
+    }
+#if EV08P02A_ENABLE_ADC_POT
+    if (msg->name == 'P' && msg->kind == '?' && msg->data_len == 0u) {
+        ev08p02a_pot_report();
+        msg->status = APP_CONSOLE_OK;
+        return;
+    }
+#endif
+    if (msg->name == 's' && msg->kind == '?' && msg->data_len == 0u) {
+        wm8904_audio_avas_pitch_report();
+        wm8904_audio_avas_gain_report();
+        msg->status = APP_CONSOLE_OK;
+        return;
+    }
+#if EV08P02A_PWM_AUDIO
+    if (msg->name == 'p') {
+        bool ok = true;
+        if (msg->kind == '?' && msg->data_len == 0u) {
+            ev08p02a_pwm_audio_report();
+        } else if (msg->kind == '*' && msg->data_len == 2u &&
+                   msg->data[0] == 0x55u && msg->data[1] <= 1u) {
+            ok = ev08p02a_pwm_audio_lab_control(msg->data[1] != 0u);
+            ev08p02a_pwm_audio_report();
+        } else if (msg->kind == '*' && msg->data_len == 2u && msg->data[0] == 0x56u) {
+            ok = ev08p02a_pwm_audio_set_ns_order(msg->data[1]);
+            ev08p02a_pwm_audio_report();
+        } else if (msg->kind == '*' && msg->data_len == 2u && msg->data[0] == 0x58u) {
+            ok = ev08p02a_pwm_audio_set_test_mode(msg->data[1]);
+            ev08p02a_pwm_audio_report();
+        } else if (msg->kind == '*' && msg->data_len == 2u &&
+                   msg->data[0] == 0x59u && msg->data[1] == 0x01u) {
+            ev08p02a_pwm_audio_inject_stage_fault();
+            ev08p02a_pwm_audio_report();
+        } else if (msg->kind == '*' && msg->data_len == 2u && msg->data[0] == 0x57u) {
+            /* signed whole dB: *cp570C = +12, *cp57F4 = -12 */
+            ok = ev08p02a_pwm_audio_set_gain_x10((int16_t)((int8_t)msg->data[1] * 10));
+            ev08p02a_pwm_audio_report();
+        } else if (EV08P02A_PWM_SCOPE_ONLY && msg->kind == '*' &&
+                   msg->data_len == 1u && msg->data[0] <= 3u) {
+            if (msg->data[0] <= 1u) {
+                (void)ev08p02a_pwm_audio_lab_control(false);
+                if (msg->data[0] == 1u) ok = ev08p02a_pwm_audio_start();
+            } else {
+                ev08p02a_pwm_audio_set_neutral(msg->data[0] == 2u);
+            }
+            ev08p02a_pwm_audio_report();
+        } else {
+            console_out_str("PWM: ?cp / *cp5500 stop / *cp5501 lab start (nFAULT bypass) / "
+                            "*cp560N shaper 0..2 / *cp57GG gain dB (s8) / *cp580N test 0 off/1 tone/2 raw/3 20-80 per period/4 per 16; *cp5901 inject nFAULT; "
+                            "scope: *cp00 stop / 01 start / 02 neutral / 03 audio\n");
+            msg->status = APP_CONSOLE_ERR_BAD_DATA;
+            return;
+        }
+        msg->status = ok ? APP_CONSOLE_OK : APP_CONSOLE_ERR_OPERATION_FAILED;
+        return;
+    }
+#endif
 
     if (msg->name != 'y') {
         msg->status = APP_CONSOLE_ERR_NOT_FOUND;
@@ -854,7 +977,7 @@ void ev08p02a_classic_console_onmsg(app_console_msg_t *msg)
  * safe here. State remains in the audio module, rather than a duplicate flag beside the
  * key, so the two voice keys cannot drift apart.
  *
- * UP/DOWN ARROW -- AVAS pitch trim, +-5 cent per press (see wm8904_audio_avas_pitch_step()
+ * UP/DOWN ARROW -- AVAS pitch trim, +-10 cent per press (see wm8904_audio_avas_pitch_step()
  * and the module comment's *tc entry). A terminal sends an arrow as three bytes, the ANSI
  * CSI sequence ESC '[' 'A' (up) or ESC '[' 'B' (down), so this needs a tiny state machine
  * across calls rather than a single-byte match. app_console.c has no ESC handling of its
@@ -873,9 +996,13 @@ void ev08p02a_classic_console_onmsg(app_console_msg_t *msg)
  */
 bool ev08p02a_transport_console_hotkey(uint8_t ch)
 {
-    static uint8_t s_esc_state; /* 0 = idle, 1 = saw ESC, 2 = saw ESC '[' */
+    static uint8_t s_esc_state;
+    static uint32_t s_esc_ms;
+    uint32_t now = GetTicks();
+    if (s_esc_state && (uint32_t)(now - s_esc_ms) > 250u) s_esc_state = 0u;
 
     if (s_esc_state == 2u) {
+        if (ch < 0x40u || ch > 0x7eu) return true;
         s_esc_state = 0u;
         if ((ch == (uint8_t)'A') || (ch == (uint8_t)'B')) {
 #if EV08P02A_ENABLE_ADC_POT
@@ -886,19 +1013,20 @@ bool ev08p02a_transport_console_hotkey(uint8_t ch)
              */
             ev08p02a_avas_pot_keys_took_over();
 #endif
-            wm8904_audio_avas_pitch_step((ch == (uint8_t)'A') ? +5 : -5);
+            wm8904_audio_avas_pitch_step((ch == (uint8_t)'A') ? +10 : -10);
             return true;
         }
         return true;   /* some other CSI final byte -- swallow it, see above */
     }
 
     if (s_esc_state == 1u) {
-        s_esc_state = (ch == (uint8_t)'[') ? 2u : 0u;
+        s_esc_state = (ch == (uint8_t)'[' || ch == (uint8_t)'O') ? 2u : 0u;
         return true;
     }
 
     if (ch == 0x1Bu) {
         s_esc_state = 1u;
+        s_esc_ms = now;
         return true;
     }
 
@@ -916,6 +1044,18 @@ bool ev08p02a_transport_console_hotkey(uint8_t ch)
         wm8904_audio_avas_voice_key((ch == (uint8_t)'a')
                                         ? (uint8_t)WM8904_AUDIO_AVAS_VOICE_TYPE_TY
                                         : (uint8_t)WM8904_AUDIO_AVAS_VOICE_TYPE_LB);
+        return true;
+    }
+
+    /* AVAS level trim, 1 dB a press, the same keys as sonora's AK Nano ('=' is the
+     * unshifted '+'). Reached only with the console idle, so a '-' inside a typed
+     * command line is still the line's. */
+    if (ch == (uint8_t)'-') {
+        wm8904_audio_avas_gain_step(-1);
+        return true;
+    }
+    if ((ch == (uint8_t)'=') || (ch == (uint8_t)'+')) {
+        wm8904_audio_avas_gain_step(+1);
         return true;
     }
 
@@ -957,7 +1097,7 @@ bool ev08p02a_transport_console_hotkey(uint8_t ch)
  * PR1 = 12499. timer_app_start_from_fcy() refuses inexact divisors rather than rounding,
  * so a future operating point that cannot make a whole millisecond says so at bring-up.
  */
-#define EV08P02A_ASSUMED_FCY_HZ (EV08P02A_TARGET_FOSC_HZ / 2UL)  /* 100 MHz */
+#define EV08P02A_ASSUMED_FCY_HZ (EV08P02A_TARGET_FOSC_HZ / 2UL)
 
 /* 500 ms per LED state -> 1.000 s full cycle. */
 #define EV08P02A_LED_STATE_PERIOD_MS (500u)
@@ -965,21 +1105,22 @@ bool ev08p02a_transport_console_hotkey(uint8_t ch)
 /*
  * SW0 sampling cadence, inside the wait rather than once per LED state.
  *
- * A deliberate human press is 100-300 ms, so sampling once per 500 ms iteration would
- * miss taps often enough to look like a broken button. Not sampled every millisecond
- * either, which the running time now makes possible: at 1 ms, contact bounce on RELEASE
- * can be seen as a second press and toggle the pause twice from one gesture. 100 ms is
- * comfortably above bounce and comfortably below the shortest real press -- it is the
- * cadence the polled-Timer1 version happened to have, kept on purpose.
+ * Audio polls every 5 ms and the board gesture callback applies 15 ms debounce.
+ * The legacy non-audio blink-pause experiment still polls every 100 ms; its
+ * raw edge detector has no gesture debounce and must not inherit the faster cadence.
  *
  * THIS APPLIES TO BOTH USES OF SW0, since 2026-08-05. It used to be compiled in only for
  * the blink-pause test, so the AUDIO build -- where SW0 is the mute button -- was left
  * sampling once per 500 ms iteration, and a normal tap was missed outright: the button
  * only answered when held past half a second. The reasoning above never depended on which
- * of the two the press means, so the gate in wait_next_led_edge() is now the union of the
- * two builds and only the action inside differs.
+ * of the two the press means, so the gate in wait_next_led_edge() is the union of
+ * the two builds; the action and sampling cadence inside follow the selected use.
  */
+#if DEMO_ENABLE_WM8904_AUDIO
+#define EV08P02A_SW0_SAMPLE_PERIOD_MS (5u)
+#else
 #define EV08P02A_SW0_SAMPLE_PERIOD_MS (100u)
+#endif
 
 /* The RX DMA callback publishes raw CODEC-IN words once per completed TDM block; the
  * peak/mask calculation belongs in main context. One millisecond preserves a useful
@@ -1159,6 +1300,9 @@ static void wait_next_led_edge(void)
 #endif
 
     while ((uint32_t)(GetTicks() - s_led_edge_ms) < EV08P02A_LED_STATE_PERIOD_MS) {
+#if EV08P02A_PWM_AUDIO
+        ev08p02a_pwm_audio_poll();
+#endif
         /*
          * Service the console here rather than once per main-loop iteration. The loop
          * spends essentially all of its ~500 ms inside this wait, and the UART RX path is
@@ -1171,6 +1315,7 @@ static void wait_next_led_edge(void)
 #endif
 
 #if DEMO_ENABLE_WM8904_AUDIO
+        ev08p02a_audio_led_poll();
         if ((uint32_t)(GetTicks() - audio_observe_ms) >=
             EV08P02A_AUDIO_OBSERVE_PERIOD_MS) {
             /* Resample rather than catch up: this is intentionally a diagnostic meter,
@@ -1354,6 +1499,15 @@ void profile_bring_up(void)
 void profile_report(void)
 {
     report_operating_point();
+#if EV08P02A_PWM_AUDIO
+    console_out_str("PWM audio HAL: socket 3 PWM=RB7 CS=RB15 nSLEEP=RB13 nFAULT=RB12; "
+                    "?cp status / *cp5500 stop / *cp5501 explicit lab start\n");
+    console_out_str(EV08P02A_PWM_CLOCK_FRC ? "PWM clock: FRCPLL, elastic FIFO; no OSCI jumper\n" :
+                    "PWM clock: ECPLL; X1->OSCI jumper required\n");
+    if (EV08P02A_PWM_SCOPE_ONLY)
+        console_out_str("SCOPE ONLY: nSLEEP Low; *cp00/01 stop/start, *cp02/03 neutral/audio\n");
+    ev08p02a_pwm_audio_report();
+#endif
 
     if (!g_ev08p02a_tick_start_ok) {
         console_out_str(
@@ -1452,7 +1606,7 @@ void profile_start(void)
     console_out_str("      'a' / 'A' alone (no Enter) start the AVAS synth's"
                     " type_ty / type_lb voice, exclusive; while one is sounding EITHER"
                     " key stops it (fades out over ~3 s);"
-                    " up/down arrow trim pitch +-5 cent"
+                    " up/down arrow trim pitch +-10 cent"
 #if EV08P02A_ENABLE_ADC_POT
                     " and take it from the POT until the next 'a' / 'A';"
                     " the POT Click trims it clockwise-up, 0..+200 cent"
@@ -1471,6 +1625,10 @@ void profile_start(void)
  */
 void profile_poll(bool report)
 {
+    report = report && s_periodic_report_enabled;
+#if EV08P02A_PWM_AUDIO
+    if (report) ev08p02a_pwm_audio_report();
+#endif
 #if DEMO_ENABLE_I2C_PROBE
     i2c_probe_poll(&s_i2c1_probe, report);
 #endif
@@ -1538,8 +1696,12 @@ bool profile_wait_next_tick(void)
         ev08p02a_led0_set(led_on);
     }
 #else
+#if !DEMO_ENABLE_WM8904_AUDIO
     led_on = !led_on;
     ev08p02a_led0_set(led_on);
+#else
+    (void)led_on; /* Audio LED is serviced inside the wait at both blink rates. */
+#endif
 #endif
 
     /*

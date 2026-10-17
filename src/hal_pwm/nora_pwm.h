@@ -8,7 +8,8 @@
  * The surface deliberately follows Sonora's nora_pwm shape: module clock
  * ownership is explicit, generator setup is data-driven, and duty writes are
  * direct.  CK256MP508's PWM1L/PWM2L/PWM3L pins used by DM330030 are fixed
- * peripheral functions, not PPS routes, so pin routing does not belong here.
+ * peripheral functions, not PPS routes. PG4H/L can also use PPS on MC005;
+ * pin routing remains the board's responsibility, outside this HAL.
  */
 
 #include <stdbool.h>
@@ -18,6 +19,7 @@ typedef enum {
     NORA_PWM_GEN_1 = 0,
     NORA_PWM_GEN_2,
     NORA_PWM_GEN_3,
+    NORA_PWM_GEN_4,
     NORA_PWM_GEN_COUNT,
 } nora_pwm_generator_id_t;
 
@@ -27,8 +29,8 @@ typedef enum {
     NORA_PWM_MODE_PUSH_PULL,
 } nora_pwm_output_mode_t;
 
-/* PCLKCON is shared by all PWM generators.  STANDARD is the CPU peripheral
- * clock (Fcy); no board-specific high-frequency clock is required on CK. */
+/* PCLKCON is shared by all PWM generators. STANDARD selects FOSC for a
+ * generator whose CLKSEL is 01; DIVSEL does not divide that direct path. */
 typedef enum {
     NORA_PWM_MCLK_STANDARD = 0,
 } nora_pwm_mclk_source_t;
@@ -52,5 +54,16 @@ bool nora_pwm_generator_init(nora_pwm_generator_id_t id,
                              const nora_pwm_generator_cfg_t *cfg);
 void nora_pwm_generator_set_duty(nora_pwm_generator_id_t id, uint16_t duty);
 bool nora_pwm_generator_is_present(nora_pwm_generator_id_t id);
+
+/* Output override: enable=true forces PWMxH and PWMxL to `high`, enable=false
+ * returns them to the PWM. Applied at the generator's next SOC when
+ * synchronous, otherwise immediately; both pins change in one register
+ * write. Same shape as the dsPIC33AK nora_pwm_generator_override(). */
+bool nora_pwm_generator_override(nora_pwm_generator_id_t id, bool enable,
+                                 bool high, bool synchronous);
+
+/* Stop or restart an initialized generator (PGxCONL.ON) without
+ * reprogramming it. */
+bool nora_pwm_generator_run(nora_pwm_generator_id_t id, bool on);
 
 #endif /* NORA_PWM_H */

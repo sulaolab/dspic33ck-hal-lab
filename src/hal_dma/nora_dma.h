@@ -89,6 +89,7 @@ typedef enum {
     NORA_DMA_TRIGGER_SPI2_TX,
     NORA_DMA_TRIGGER_SPI3_RX,
     NORA_DMA_TRIGGER_SPI3_TX,
+    NORA_DMA_TRIGGER_PWM_EVENT_A,
 } nora_dma_trigger_t;
 
 /* A raw, backend-owned DMA status snapshot. Use the query functions below

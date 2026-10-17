@@ -1,4 +1,5 @@
 #include <xc.h>
+#include "app_config.h"
 
 #ifndef DSPIC33CK_BOARD_EV08P02A
 #error "boards/ev08p02a/config_bits.c is EV08P02A-owned. Build it only in the CK256MC005_EV08P02A configuration -- if it reached another one, fix the <item ex=...> exclusions in firmware.X/nbproject/configurations.xml."
@@ -6,8 +7,9 @@
 
 /*
  * First bring-up configuration for EV08P02A:
- * - internal FRC with postscaler, no primary oscillator assumption; the runtime
- *   then switches FRC->PLL up to the device maximum (see ev08p02a_clock_init)
+ * - the normal image starts on internal FRC then selects FRCPLL; the default
+ *   PWM image selects ECPLL from Rev4/Rev5 X1 on RB0/OSCI, while the HAL's
+ *   jumper-free FRCPLL option stays on the internal clock source
  * - clock switching enabled (CSECMD), which that runtime switch requires
  * - PLL lock safety OFF, deliberately: PLLKEN = ON gates the PLL output away
  *   when lock is lost, which stops the core dead with no clock and no way to
@@ -30,8 +32,16 @@
  *   own semantic name, not the raw bit table, when porting this elsewhere.
  */
 #pragma config FNOSC = FRCDIVN
+#if EV08P02A_PWM_AUDIO && !EV08P02A_PWM_CLOCK_FRC
+#pragma config POSCMD = EC
+#pragma config FCKSM = CSECME
+#else
 #pragma config POSCMD = NONE
 #pragma config FCKSM = CSECMD
+#endif
+#if EV08P02A_PWM_AUDIO
+#pragma config DUPPWM = PPS_ONLY
+#endif
 #pragma config PLLKEN = OFF
 #pragma config FWDTEN = ON_SW
 #pragma config ICS = PGD3

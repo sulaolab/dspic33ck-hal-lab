@@ -34,6 +34,7 @@ tools/nora_hal_sync/** export-ignore
 .github/**             export-ignore
 docs_internal/**       export-ignore
 AGENTS.md               export-ignore
+tools/check_vendor_source.ps1 export-ignore
 CLAUDE.md               export-ignore
 .serial-monitor.json    export-ignore
 
@@ -41,5 +42,13 @@ CLAUDE.md               export-ignore
 tools/publish/**        export-ignore
 tools/host_check/**     export-ignore
 tools/cost_probe/**     export-ignore
-buildtools/migrate_configurations_xml.ps1 export-ignore
 buildtools/add_board_ownership_guards.ps1  export-ignore
+
+# Session handovers, cross-repository requests and local publication helpers.
+NEXT_*.md export-ignore
+REQUEST_*.md export-ignore
+tools_local/** export-ignore
+docs/ak_nano_pwm_scope_validation_handoff.md export-ignore
+tools/pwm_audio_host/README.md export-ignore
+tools/check_publication.py export-ignore
+tools/test_publication_gate.py export-ignore

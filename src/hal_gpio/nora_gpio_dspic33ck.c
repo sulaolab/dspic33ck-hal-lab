@@ -43,7 +43,11 @@ static const nora_gpio_port_regs_t gpio_ports[] = {
 #else
     GPIO_PORT_EMPTY,
 #endif
+#if defined(ANSELF) && defined(TRISF) && defined(PORTF) && defined(LATF)
+    GPIO_PORT_ROW(F),
+#else
     GPIO_PORT_EMPTY,
+#endif
     GPIO_PORT_EMPTY,
     GPIO_PORT_EMPTY
 };
@@ -142,10 +146,28 @@ bool nora_gpio_set_open_drain(nora_gpio_pin_t pin, bool enable)
     return true;
 }
 
+/*
+ * Glitch-aware apply order, and it differs per direction because the hazard does.
+ *
+ * OUTPUT: attributes, then seed LAT, then TRIS last -- so the pad starts driving a
+ * level the caller chose instead of whatever LAT happened to hold.
+ *
+ * INPUT: TRIS first, then the attributes. A pin that is currently a live output has
+ * to stop driving BEFORE analog / pull / open-drain change underneath it; doing it
+ * the other way round momentarily drives a pad that is, say, already switched to
+ * analog. Only the first-time case (TRIS already input at reset) is insensitive to
+ * this, and a runtime output-to-input transition is exactly the case that is not.
+ */
 bool nora_gpio_config(nora_gpio_pin_t pin, const nora_gpio_config_t *config)
 {
     if (config == NULL) {
         return false;
+    }
+
+    if (config->dir == NORA_GPIO_DIR_INPUT) {
+        if (!nora_gpio_set_direction(pin, NORA_GPIO_DIR_INPUT)) {
+            return false;
+        }
     }
 
     if (!nora_gpio_set_analog(pin, config->analog)) {
@@ -158,13 +180,15 @@ bool nora_gpio_config(nora_gpio_pin_t pin, const nora_gpio_config_t *config)
         return false;
     }
 
-    if (config->dir == NORA_GPIO_DIR_OUTPUT) {
-        if (!nora_gpio_write(pin, config->initial_high)) {
-            return false;
-        }
+    if (config->dir == NORA_GPIO_DIR_INPUT) {
+        return true;
     }
 
-    return nora_gpio_set_direction(pin, config->dir);
+    if (!nora_gpio_write(pin, config->initial_high)) {
+        return false;
+    }
+
+    return nora_gpio_set_direction(pin, NORA_GPIO_DIR_OUTPUT);
 }
 
 bool nora_gpio_config_digital_input(nora_gpio_pin_t pin)
@@ -276,6 +300,71 @@ bool nora_gpio_pin_from_rp(nora_gpio_rp_t rp, nora_gpio_pin_t *pin)
         return true;
     }
 
+    /* Probe each extended RP alias: availability is per selected device. */
+    switch (rp) {
+#ifdef _RP80R
+    case 80u: *pin = NORA_GPIO_PIN(NORA_GPIO_PORT_F, 0u); return true;
+#endif
+#ifdef _RP81R
+    case 81u: *pin = NORA_GPIO_PIN(NORA_GPIO_PORT_F, 1u); return true;
+#endif
+#ifdef _RP82R
+    case 82u: *pin = NORA_GPIO_PIN(NORA_GPIO_PORT_F, 2u); return true;
+#endif
+#ifdef _RP83R
+    case 83u: *pin = NORA_GPIO_PIN(NORA_GPIO_PORT_F, 3u); return true;
+#endif
+#ifdef _RP84R
+    case 84u: *pin = NORA_GPIO_PIN(NORA_GPIO_PORT_F, 4u); return true;
+#endif
+#ifdef _RP85R
+    case 85u: *pin = NORA_GPIO_PIN(NORA_GPIO_PORT_F, 5u); return true;
+#endif
+#ifdef _RP86R
+    case 86u: *pin = NORA_GPIO_PIN(NORA_GPIO_PORT_F, 6u); return true;
+#endif
+#ifdef _RP87R
+    case 87u: *pin = NORA_GPIO_PIN(NORA_GPIO_PORT_F, 7u); return true;
+#endif
+#ifdef _RP88R
+    case 88u: *pin = NORA_GPIO_PIN(NORA_GPIO_PORT_F, 8u); return true;
+#endif
+#ifdef _RP89R
+    case 89u: *pin = NORA_GPIO_PIN(NORA_GPIO_PORT_F, 9u); return true;
+#endif
+#ifdef _RP90R
+    case 90u: *pin = NORA_GPIO_PIN(NORA_GPIO_PORT_F, 10u); return true;
+#endif
+#ifdef _RP91R
+    case 91u: *pin = NORA_GPIO_PIN(NORA_GPIO_PORT_F, 11u); return true;
+#endif
+#ifdef _RP92R
+    case 92u: *pin = NORA_GPIO_PIN(NORA_GPIO_PORT_F, 12u); return true;
+#endif
+#ifdef _RP93R
+    case 93u: *pin = NORA_GPIO_PIN(NORA_GPIO_PORT_F, 13u); return true;
+#endif
+#ifdef _RP94R
+    case 94u: *pin = NORA_GPIO_PIN(NORA_GPIO_PORT_F, 14u); return true;
+#endif
+#ifdef _RP95R
+    case 95u: *pin = NORA_GPIO_PIN(NORA_GPIO_PORT_F, 15u); return true;
+#endif
+#ifdef _RP96R
+    case 96u: *pin = NORA_GPIO_PIN(NORA_GPIO_PORT_A, 5u); return true;
+#endif
+#ifdef _RP97R
+    case 97u: *pin = NORA_GPIO_PIN(NORA_GPIO_PORT_A, 6u); return true;
+#endif
+#ifdef _RP98R
+    case 98u: *pin = NORA_GPIO_PIN(NORA_GPIO_PORT_A, 7u); return true;
+#endif
+#ifdef _RP99R
+    case 99u: *pin = NORA_GPIO_PIN(NORA_GPIO_PORT_A, 8u); return true;
+#endif
+    default: break;
+    }
+
     /*
      * Virtual RPs RPV0-5 (RP176-181) are internal PPS-only pins with no GPIO
      * port pad; they are intentionally NOT mapped here (mirroring the AK HAL,
@@ -310,8 +399,18 @@ bool nora_gpio_rp_from_pin(nora_gpio_pin_t pin, nora_gpio_rp_t *rp)
         return true;
     }
 
-    /* Only ports B/C/D are remappable (RP32-79). Port A/E have no RPn; the
-     * virtual RPV0-5 outputs are not exposed through this GPIO-typed API. */
+    if ((port == NORA_GPIO_PORT_F) ||
+        ((port == NORA_GPIO_PORT_A) && (bit >= 5u) && (bit <= 8u))) {
+        nora_gpio_pin_t mapped;
+        nora_gpio_rp_t candidate = (nora_gpio_rp_t)((port == NORA_GPIO_PORT_F) ?
+                                                  (80u + bit) : (91u + bit));
+        if (nora_gpio_pin_from_rp(candidate, &mapped) && (mapped == pin)) {
+            *rp = candidate;
+            return true;
+        }
+    }
+
+    /* Port E and virtual RPV endpoints have no GPIO-to-RP mapping. */
     return false;
 }
 

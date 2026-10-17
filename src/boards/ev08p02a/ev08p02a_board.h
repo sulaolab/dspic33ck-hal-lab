@@ -35,6 +35,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "app_config.h" /* EV08P02A_PWM_AUDIO selects this board's clock */
 
 /* For NORA_UART_INST_1, named by EV08P02A_CONSOLE_UART_INST below. Included
  * here rather than left to each caller so the constant is usable on its own. */
@@ -58,7 +59,11 @@ extern "C" {
 #endif
 
 #define EV08P02A_FRC_HZ         (8000000UL)     /* internal FRC, PLL input */
-#define EV08P02A_TARGET_FOSC_HZ (200000000UL)   /* device max: 200 MHz Fosc / 100 MIPS */
+#if EV08P02A_PWM_AUDIO && !EV08P02A_PWM_CLOCK_FRC
+#define EV08P02A_TARGET_FOSC_HZ (196608000UL) /* Rev4/5 X1 ECPLL / 48 kHz = 4096 */
+#else
+#define EV08P02A_TARGET_FOSC_HZ (200000000UL) /* FRCPLL normal, scope, or HAL MPQ */
+#endif
 
 /*
  * Console baud, chosen from the operating point actually reached.
@@ -88,6 +93,20 @@ extern "C" {
  * it actually got from the HAL with it.
  */
 #define EV08P02A_CONSOLE_UART_INST (NORA_UART_INST_1)
+
+/*
+ * Console TX is interrupt-driven on this board: console_out queues into a RAM ring and
+ * the UART1 TX interrupt drains it (ev08p02a_console_out.c says why). Priority 1, the
+ * lowest, so it can never delay the PWM DMA refill (5) or the SPI1 RX block ISR (4).
+ */
+#define EV08P02A_CONSOLE_TX_IRQ_PRIORITY (1u)
+
+/*
+ * Arm the interrupt-driven console TX. Call once, right after the console UART is
+ * initialized; until then (and if arming fails) console_out falls back to the
+ * blocking write it always used, so no output is lost to the ordering.
+ */
+void ev08p02a_console_out_tx_init(void);
 
 /*
  * Bring the board up, in the order the dependencies require: reset-cause latch (before

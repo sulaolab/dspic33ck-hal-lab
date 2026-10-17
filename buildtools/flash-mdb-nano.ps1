@@ -31,7 +31,7 @@ USAGE
 param(
     [switch]$DryRun,
     [switch]$Quiet,
-    [ValidateSet('CK256MC005_EV08P02A', 'CK64MC105_EV88G73A')]
+    [ValidateSet('CK256MC005_EV08P02A')]
     [string]$Configuration = 'CK256MC005_EV08P02A',
     [string]$Hex,
     [string]$ProjectDir = (Join-Path $PSScriptRoot '..\firmware.X'),
@@ -58,6 +58,7 @@ param(
       *ts -- protecting the other board and leaving this one live.
     #>
     [string]$MonitorUrl,
+    [string]$MonitorRoot,
     <#
       Which serial_monitor profile the target board is on, for the gate's
       wrong-board check.
@@ -78,35 +79,14 @@ param(
 $ErrorActionPreference = 'Stop'
 
 <#
-  The profile each configuration's board is normally watched on. Stated as a
-  table rather than guessed from the configuration name: the mapping is a fact
-  about this PC's serial_monitor profiles (which board owns which loopback
-  alias), not something derivable from a build configuration.
-
-  EV08P02A is on 'nano' and EV88G73A on 'ck' -- both are CK Curiosity Nano kits,
-  which is exactly why one hard-coded name silently covered only one of them.
+      Both supported configurations are CK Curiosity Nano kits. The canonical
+      profile names the board family; the selected COM port, not the profile,
+      determines the loopback endpoint.
 #>
 if ([string]::IsNullOrWhiteSpace($MonitorProfile)) {
     $MonitorProfile = switch ($Configuration) {
-        'CK256MC005_EV08P02A' { 'nano' }
-        'CK64MC105_EV88G73A'  { 'ck'   }
-        default               { 'ck'   }
-    }
-}
-
-<#
-  The bind for that profile. The AUTHORITY is the serial_monitor profile system,
-  not this table -- ask it with
-      pwsh ../serial-monitor/start-serial-monitor.ps1 -Profile <name> -List
-  which prints "Profile 'x' -> bind <addr>" and exits. The table exists so the
-  common case needs no argument; a mismatch is caught rather than silent, because
-  the gate compares /status.profile against $MonitorProfile and says so.
-#>
-if ([string]::IsNullOrWhiteSpace($MonitorUrl)) {
-    $MonitorUrl = switch ($MonitorProfile) {
-        'nano' { 'http://127.0.0.6:8080' }
-        'ck'   { 'http://127.0.0.5:8080' }
-        default { 'http://127.0.0.5:8080' }
+        'CK256MC005_EV08P02A' { 'ck-nano' }
+        default               { 'ck-nano' }
     }
 }
 
@@ -116,10 +96,24 @@ function Write-Status {
 }
 
 . (Join-Path $PSScriptRoot 'nano-console-gate.ps1')
+. (Join-Path $PSScriptRoot 'serial-monitor-resolver.ps1')
+
+$monitorResolveError = $null
+if ($StopAudioCommand -ne 'none') {
+    try {
+        $MonitorUrl = Resolve-RunningSerialMonitorUrl -RequestedUrl $MonitorUrl `
+            -ExpectedProfile $MonitorProfile `
+            -RepoRoot (Resolve-Path (Join-Path $PSScriptRoot '..')).Path `
+            -MonitorRoot $MonitorRoot
+    } catch {
+        $monitorResolveError = $_.Exception.Message
+        if ($RequireVerifiedMute) { throw }
+        Write-Status "WARNING: serial-monitor endpoint not resolved -- mute cannot be attempted ($monitorResolveError)"
+    }
+}
 
 $device = switch ($Configuration) {
     'CK256MC005_EV08P02A' { 'dsPIC33CK256MC005' }
-    'CK64MC105_EV88G73A'  { 'dsPIC33CK64MC105' }
 }
 
 if ([string]::IsNullOrWhiteSpace($Hex)) {
@@ -149,20 +143,24 @@ Write-Status "Image:         $hexPath"
 if ($StopAudioCommand -eq 'none') {
     Write-Status 'WARNING: stop-audio mute explicitly disabled (-StopAudioCommand none)'
 } else {
-    # Identifying the monitor's kit is informational here, not a precondition: it
-    # needs the monitor, not the target, and a board too dead to answer must still
-    # be programmable. Unknown = the wrong-board check is skipped, not failed.
-    $monKit = Resolve-MonitorKitSerial -MonitorUrl $MonitorUrl
-    if ($monKit.Ok) { Write-Status "Monitor kit:   $($monKit.Serial) on $($monKit.Port)" }
-    else            { Write-Status "Monitor kit:   unknown ($($monKit.Detail))" }
-    if ($DryRun) {
-        Write-Status "Dry-run: would attempt a '$StopAudioCommand' mute via $MonitorUrl before programming (bounded, non-blocking)"
+    if ([string]::IsNullOrWhiteSpace($MonitorUrl)) {
+        Write-Status "WARNING: mute NOT verified -- programming anyway: $monitorResolveError"
     } else {
-        Invoke-BestEffortAudioStop -MonitorUrl $MonitorUrl -Command $StopAudioCommand `
-                                 -ExpectedKitSerial $monKit.Serial `
-                                 -ExpectedProfile $MonitorProfile `
-                                 -TimeoutSec $MuteTimeoutSec -SettleMs $MuteSettleMs `
-                                 -RequireVerified:$RequireVerifiedMute | Out-Null
+        # Identifying the monitor's kit is informational here, not a precondition:
+        # it needs the monitor, not the target, and a dead board must still be
+        # programmable. Unknown skips the kit check rather than failing it.
+        $monKit = Resolve-MonitorKitSerial -MonitorUrl $MonitorUrl
+        if ($monKit.Ok) { Write-Status "Monitor kit:   $($monKit.Serial) on $($monKit.Port)" }
+        else            { Write-Status "Monitor kit:   unknown ($($monKit.Detail))" }
+        if ($DryRun) {
+            Write-Status "Dry-run: would attempt a '$StopAudioCommand' mute via $MonitorUrl before programming (bounded, non-blocking)"
+        } else {
+            Invoke-BestEffortAudioStop -MonitorUrl $MonitorUrl -Command $StopAudioCommand `
+                                     -ExpectedKitSerial $monKit.Serial `
+                                     -ExpectedProfile $MonitorProfile `
+                                     -TimeoutSec $MuteTimeoutSec -SettleMs $MuteSettleMs `
+                                     -RequireVerified:$RequireVerifiedMute | Out-Null
+        }
     }
 }
 

@@ -157,6 +157,13 @@ typedef struct {
      */
     bool (*mute_button_pressed)(void);
 
+    /* Optional board output consuming the final TDM block. Called in the SPI1
+     * RX DMA ISR after the selected path, including AVAS and post gain. A
+     * consumer must be bounded and must not touch the source block. */
+    void (*output_block)(const nora_tdm_slot_t *dst);
+    bool (*output_start)(void);
+    void (*output_stop)(void);
+
     /*
      * One line naming the wiring, printed at bring-up. A report that does not say
      * which pins and which clock arrangement it drove is a report nobody can act on --
@@ -549,6 +556,10 @@ bool wm8904_audio_output_activity_take(void);
  * refactor it did not participate in.
  */
 void wm8904_audio_button_poll(void);
+/* Bench controls use the same ISR-owned mute ramp and AVAS engine. */
+bool wm8904_audio_mute_requested(void);
+void wm8904_audio_mute_report(void);
+void wm8904_audio_avas_button(void);
 
 /* True once the transport is running and the codec is unmuted. */
 bool wm8904_audio_started(void);
@@ -734,6 +745,15 @@ void wm8904_audio_post_gain_report(void);
 bool wm8904_audio_avas_pitch_set(int16_t cent);
 void wm8904_audio_avas_pitch_report(void);
 void wm8904_audio_avas_pitch_step(int16_t delta_cent);
+
+/*
+ * AVAS level trim, whole dB above the voice's own level, clamped to 0..+20 dB. Applied to
+ * the AVAS stage only, through a short per-block ramp. 0 dB at boot and at every AVAS
+ * start. _step() prints the result through _report(), which also states how many samples
+ * the boost clamped since the previous report. EV08P02A binds `-` / `=` `+` to _step().
+ */
+void wm8904_audio_avas_gain_step(int16_t delta_db);
+void wm8904_audio_avas_gain_report(void);
 
 /* Set DM330030's POT base pitch in cent, unipolar from the reference voice pitch (0)
  * through AVAS_LINE_CK_PITCH_LIMIT_CENT.  This is silent -- unlike console/arrow pitch

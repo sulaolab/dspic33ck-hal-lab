@@ -157,14 +157,30 @@ volatile uint16_t g_ev08p02a_clock_diag = 0u;
  */
 static void ev08p02a_clock_init(void)
 {
+    /* Audio PWM normally uses X1 -> ECPLL -> 196.608 MHz. The scope-only FRC
+     * pin test, HAL FRC MPQ build, and ordinary image use FRCPLL -> 200 MHz. */
     static const nora_clock_dspic33ck_bringup_t req = {
+#if EV08P02A_PWM_AUDIO && !EV08P02A_PWM_CLOCK_FRC
+        .source         = NORA_CLOCK_SOURCE_PRIMARY,
+        .input_hz       = 12288000UL,
+#else
         .source         = NORA_CLOCK_SOURCE_FRC,
         .input_hz       = EV08P02A_FRC_HZ,
+#endif
         .target_fosc_hz = EV08P02A_TARGET_FOSC_HZ,
     };
     nora_clock_dspic33ck_bringup_result_t res;
 
     nora_clock_dspic33ck_bringup(&req, &res);
+
+#if EV08P02A_PWM_AUDIO && !EV08P02A_PWM_CLOCK_FRC
+    /* The generic bring-up retries its requested source on failure. For EC that
+     * source may be absent, so explicitly select the internal FRC for a usable
+     * diagnostic console. Never arm PWM unless on_target remains true. */
+    if (!res.on_target) {
+        (void)nora_clock_switch_source(NORA_CLOCK_SOURCE_FRC, EV08P02A_FRC_HZ);
+    }
+#endif
 
     /* Republished under this board's own names, which is what the console and a
      * debugger look for. */
@@ -223,7 +239,8 @@ void ev08p02a_board_init(void)
      * bring-up. The rate is the argument, which is the whole reason that function takes
      * one; the result lands in g_console_init_status. */
     g_ev08p02a_uart1_pins_init_ok = ev08p02a_uart1_pins_init();
-    uart_platform_stdio_init(uart_baud_applied);
+    uart_platform_stdio_init_tx_irq(uart_baud_applied, EV08P02A_CONSOLE_TX_IRQ_PRIORITY);
+    ev08p02a_console_out_tx_init();
 
     /* DMA SRAM-bus priority (MSTRPR.DMAPR), needed before any DMA channel is
      * armed -- the SPI/TDM transport behind app/wm8904_audio.c is the consumer

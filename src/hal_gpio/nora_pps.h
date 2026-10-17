@@ -13,9 +13,9 @@
  * This is the CK sibling of the AK PPS HAL and mirrors it deliberately (same
  * API, same enum shape, same self-bracketed IOLOCK contract) so AK and CK read
  * as one family. Only the silicon-forced differences live in the .c:
- *   - CK is the classic PPS block: remappable pins are RP32..RP79 (ports B/C/D
- *     only, RB0 = RP32); ports A/E have no RPn. The RP<->pin map lives in
- *     nora_gpio_dspic33ck.c.
+ *   - CK uses classic PPS: RP32..RP79 cover B/C/D. CK1024MP710 also has
+ *     RP80..RP95 on F and RP96..RP99 on A5..A8. Availability is per device;
+ *     the RP<->pin map lives in nora_gpio_dspic33ck.c.
  *   - CK requires the __builtin_write_RPCON() unlock sequence to change IOLOCK
  *     (unlike AK, whose PAC leaves RPCON directly writable). See the .c.
  *
@@ -56,7 +56,7 @@
  * Availability is per device (checked via _RP176R etc. in the .c); a virtual pin the
  * device does not define is simply unroutable and the call returns false.
  *
- * HOW MANY IS A SILICON COUNT, like NORA_GPIO_RP_MAX. This family has six
+ * Virtual endpoint count is device-specific. This CK family has six
  * (RP176..RP181) on every part here; the dsPIC33AK family has sixteen
  * (RPV0..RPV15 == RP129..RP144 on dsPIC33AK512MPS512, none at all on
  * dsPIC33AK128MC106). So the numbers behind these names are NOT portable and were

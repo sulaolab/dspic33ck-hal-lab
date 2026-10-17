@@ -4,8 +4,8 @@
  * Thin dsPIC33CK Change Notification (CN) event dispatcher for GPIO pins.
  * CK sibling of dspic33ak_gpio_event.c -- same structure and logic; the only
  * differences are silicon-forced: CK CN registers are 16-bit, and the per-port
- * CN interrupt flags live in IFS0 (A/B), IFS1 (C) and IFS4 (D/E) rather than
- * AK's IFS3/IFS9.
+ * CN interrupt flags are addressed through per-port DFP aliases (including F
+ * on CK1024MP710), so their device-specific IFS/IEC banks stay out of the code.
  *
  * The app/example owns the actual CN interrupt vector and forwards it here.
  * This keeps vector ownership out of the GPIO core while allowing small
@@ -115,6 +115,10 @@ static bool                               nora_gpio_event_irq_set_enable(unsigne
 #error "PORTE change notification is present but the DFP names no _CNEIF/_CNEIE bit alias"
 #endif
 
+#if defined(PORTF) && defined(CNCONF) && !(defined(_CNFIF) && defined(_CNFIE))
+#error "PORTF change notification is present but the DFP names no _CNFIF/_CNFIE bit alias"
+#endif
+
 static const nora_gpio_event_regs_t s_event_regs[NORA_GPIO_EVENT_PORT_COUNT] =
 {
 #if defined(PORTA) && defined(CNCONA) && defined(CNEN0A) && defined(CNEN1A) && defined(CNFA) && defined(_CNAIF)
@@ -142,7 +146,11 @@ static const nora_gpio_event_regs_t s_event_regs[NORA_GPIO_EVENT_PORT_COUNT] =
 #else
     NORA_GPIO_EVENT_PORT_NONE,
 #endif
-    NORA_GPIO_EVENT_PORT_NONE,                               /* [5] PORTF (absent) */
+#if defined(PORTF) && defined(CNCONF) && defined(CNEN0F) && defined(CNEN1F) && defined(CNFF) && defined(_CNFIF)
+    NORA_GPIO_EVENT_PORT_ROW(F),                             /* [5] PORTF */
+#else
+    NORA_GPIO_EVENT_PORT_NONE,
+#endif
     NORA_GPIO_EVENT_PORT_NONE,                               /* [6] PORTG (absent) */
     NORA_GPIO_EVENT_PORT_NONE,                               /* [7] PORTH (absent) */
 };
@@ -477,6 +485,9 @@ static bool nora_gpio_event_irq_set_priority(unsigned port_index, uint8_t priori
 #if defined(_CNEIP)
     case NORA_GPIO_PORT_E: _CNEIP = priority; return true;
 #endif
+#if defined(_CNFIP)
+    case NORA_GPIO_PORT_F: _CNFIP = priority; return true;
+#endif
     default: return false;
     }
 }
@@ -499,6 +510,9 @@ static bool nora_gpio_event_irq_clear_flag(unsigned port_index)
 #endif
 #if defined(_CNEIF)
     case NORA_GPIO_PORT_E: _CNEIF = 0u; return true;
+#endif
+#if defined(_CNFIF)
+    case NORA_GPIO_PORT_F: _CNFIF = 0u; return true;
 #endif
     default: return false;
     }
@@ -528,6 +542,9 @@ static bool nora_gpio_event_irq_flag_is_set(unsigned port_index)
 #if defined(_CNEIF)
     case NORA_GPIO_PORT_E: return (_CNEIF != 0u);
 #endif
+#if defined(_CNFIF)
+    case NORA_GPIO_PORT_F: return (_CNFIF != 0u);
+#endif
     default: return false;
     }
 }
@@ -550,6 +567,9 @@ static bool nora_gpio_event_irq_get_enable(unsigned port_index, bool *enabled)
 #endif
 #if defined(_CNEIE)
     case NORA_GPIO_PORT_E: *enabled = (_CNEIE != 0u); return true;
+#endif
+#if defined(_CNFIE)
+    case NORA_GPIO_PORT_F: *enabled = (_CNFIE != 0u); return true;
 #endif
     default: return false;
     }
@@ -583,6 +603,9 @@ static bool nora_gpio_event_irq_set_enable(unsigned port_index, bool enable)
 #if defined(_CNEIE)
         case NORA_GPIO_PORT_E: _CNEIE = 1u; return true;
 #endif
+#if defined(_CNFIE)
+        case NORA_GPIO_PORT_F: _CNFIE = 1u; return true;
+#endif
         default: return false;
         }
     }
@@ -603,6 +626,9 @@ static bool nora_gpio_event_irq_set_enable(unsigned port_index, bool enable)
 #endif
 #if defined(_CNEIE)
     case NORA_GPIO_PORT_E: _CNEIE = 0u; return true;
+#endif
+#if defined(_CNFIE)
+    case NORA_GPIO_PORT_F: _CNFIE = 0u; return true;
 #endif
     default: return false;
     }

@@ -56,6 +56,11 @@ volatile nora_uart_status_t g_console_init_status =
 
 void uart_platform_stdio_init(uint32_t baudrate)
 {
+    uart_platform_stdio_init_tx_irq(baudrate, 0u);
+}
+
+void uart_platform_stdio_init_tx_irq(uint32_t baudrate, uint8_t tx_irq_priority)
+{
     /*
      * Clocked from FOSC/2 (BCLKSEL = FOSC_DIV2), i.e. the system Fcy, taken from
      * the Clock HAL so the baud divisor tracks the actual operating point rather
@@ -73,6 +78,7 @@ void uart_platform_stdio_init(uint32_t baudrate)
         .clock_source = NORA_UART_BCLKSEL_FOSC_DIV2,
         .enable_tx    = true,
         .enable_rx    = true,
+        .tx_irq_priority = tx_irq_priority,
     };
 
     g_console_init_status = nora_uart_init(CONSOLE_UART_INST, &config);

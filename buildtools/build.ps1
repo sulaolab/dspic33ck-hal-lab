@@ -27,7 +27,7 @@ WHAT STILL LIVES HERE
 Only things that are not per-configuration project settings:
 
   -Define      extra preprocessor macros for a one-off build
-  -BuildId     the identity stamp EV88G73A prints in its banner
+  -BuildId     the identity stamp the board prints in its banner
   -Clean/-Full removing generated makefiles and build output
 
 WHAT DELIBERATELY NO LONGER LIVES HERE
@@ -56,19 +56,19 @@ param(
     <#
       Which configuration a bare `build.ps1` builds.
 
-      EV88G73A, because that is the board this lab actually has on the bench: it
-      is the one that gets flashed, listened to and measured, and the one whose
-      ROM ceiling decides design questions here. DM330030 remains buildable and
-      is still worth building (it is the roomy configuration, so it catches
-      board-ownership and exclusion mistakes that 97 %-full EV88G73A hides), but
-      it has to be asked for by name now -- defaulting to the absent board meant
-      a bare invocation built something nobody could run, and did it silently.
+      EV08P02A, because that is the CK Nano board on the bench: it is the one
+      that gets flashed, listened to and measured. EV88G73A held this default
+      until it was retired on 2026-10-15 (last buildable tree: tag
+      ck-ev88g73a-final-20261014 in the development archive, not this public
+      snapshot). The other configurations have to be asked
+      for by name -- defaulting to an absent board meant a bare invocation
+      built something nobody could run, and did it silently.
     #>
-    [ValidateSet('CK256MP508_DM330030', 'CK64MC105_EV88G73A', 'CK256MC005_EV08P02A')]
-    [string]$Configuration = 'CK64MC105_EV88G73A',
+    [ValidateSet('CK256MP508_DM330030', 'CK256MC005_EV08P02A', 'CK1024MP710_EV97U97A')]
+    [string]$Configuration = 'CK256MC005_EV08P02A',
 
     <#
-      Extra preprocessor macros, e.g. -Define EV88G73A_WM8904_DSPIC_IS_MASTER=1.
+      Extra preprocessor macros, e.g. -Define EV08P02A_WM8904_DSPIC_IS_MASTER=1.
 
       These reach the compiler through MP_EXTRA_CC_PRE, the MPLAB makefile's own
       hook. Note PRE means exactly that: it is placed BEFORE the flags the
@@ -85,7 +85,7 @@ param(
     [string[]]$Define = @(),
 
     <#
-      Identity stamp for the EV88G73A banner, so a console check can prove which
+      Identity stamp for the board's banner, so a console check can prove which
       IMAGE is running rather than merely that the board restarted. Default is
       generated per build; pass an explicit value for a reproducible hex, or
       'none' to omit it.
@@ -232,13 +232,11 @@ if ($Generate) {
 #
 # Only the Nano boards' main.c consume it -- so it is gated on the
 # configuration rather than stamped into an image that never mentions it.
-# EV08P02A (dsPIC33CK256MC005) is EV88G73A's port to a newer Nano kit and
-# reuses this exact stamping mechanism under its own prefix.
 $extraCcPre = @()
 
 $nanoBoardPrefix = switch ($Configuration) {
-    'CK64MC105_EV88G73A'  { 'EV88G73A' }
     'CK256MC005_EV08P02A' { 'EV08P02A' }
+    'CK1024MP710_EV97U97A' { 'EV97U97A' }
     default               { $null }
 }
 
@@ -294,6 +292,14 @@ if ($nanoBoardPrefix -and $BuildId -ne 'none') {
     # an escape.
     $extraCcPre += "-I`"$($genDir -replace '\\', '/')`""
     $extraCcPre += "-D${nanoBoardPrefix}_HAVE_BUILD_ID_H=1"
+    # The build stamp changes on every invocation; header dependencies are disabled
+    # by the generated IDE makefiles, so force consumers to rebuild.
+    $stampObjectDir = Join-Path $projectDir "build\$Configuration\production"
+    if (Test-Path -LiteralPath $stampObjectDir) {
+        foreach ($o in (Get-ChildItem -LiteralPath $stampObjectDir -Filter *.o -Recurse)) {
+            if ($o.BaseName -in @("main", "general_console")) { Remove-Item -LiteralPath $o.FullName }
+        }
+    }
 }
 
 foreach ($d in $Define) {
