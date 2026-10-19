@@ -102,9 +102,9 @@
 #error "EV08P02A_PWM_AUDIO_HAL_FRC requires EV08P02A_PWM_AUDIO=1"
 #endif
 #define EV08P02A_PWM_CLOCK_FRC (EV08P02A_PWM_AUDIO_HAL_FRC)
-/* Repeat each 48 kHz duty sample for 1/2/4 carrier periods. */
+/* Repeat each 48 kHz duty sample for 1/2/4 carrier periods; the default 4 gives 192 kHz. */
 #ifndef EV08P02A_PWM_CARRIER_FACTOR
-#define EV08P02A_PWM_CARRIER_FACTOR 1
+#define EV08P02A_PWM_CARRIER_FACTOR 4
 #endif
 #if (EV08P02A_PWM_CARRIER_FACTOR != 1) && (EV08P02A_PWM_CARRIER_FACTOR != 2) && (EV08P02A_PWM_CARRIER_FACTOR != 4)
 #error "EV08P02A_PWM_CARRIER_FACTOR must be 1, 2, or 4"

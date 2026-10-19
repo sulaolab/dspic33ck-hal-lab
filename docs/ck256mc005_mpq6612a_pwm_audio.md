@@ -85,7 +85,8 @@ VISEN and is not sampled by this implementation.
 
 In this build `POSCMD=EC`, `FCKSM=CSECME`, and `DUPPWM=PPS_ONLY`. The clock HAL
 selects Primary PLL at 196.608 MHz FOSC from the 12.288 MHz input. PG4 uses
-FOSC directly, period 4096, giving a 48 kHz carrier. PWM4H/L are mapped by
+FOSC directly. On this FOSC path the default carrier factor 4 uses period 1024
+(192 kHz) and factor 1 uses period 4096 (48 kHz). PWM4H/L are mapped by
 PPS to RB7/RB15. PG4 period end selects PWM Event A, which triggers DMA2 to
 write the next PG4DC. `UPDTRG=01` requests the buffered duty update on that
 write. PWM output starts at both inputs low with nSLEEP low, then wakes the
@@ -102,7 +103,7 @@ Q31 stream across nearly the full duty range while nSLEEP stays low.
 nFAULT, DMA2 overrun, or clock loss lowers nSLEEP. The oscillator-fail trap
 lowers it before the trap policy resets the chip.
 
-The 48 kHz carrier and bipolar 50% idle are for scope verification, not a
+The 192 kHz default carrier and bipolar 50% idle are for scope verification, not a
 filterless-speaker quality or thermal acceptance point. Before connecting a
 speaker, verify XTAL_OUT level/startup on RB0, 196.608 MHz PLL lock, both
 socket-3 PWM pins and complementary polarity, nSLEEP/FAULT sequencing,
